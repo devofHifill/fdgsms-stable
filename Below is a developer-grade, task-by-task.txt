@@ -1,0 +1,303 @@
+Below is a developer-grade, task-by-task checklist aligned with your Part 1 (MVP) → Part 2 (advanced) structure.
+Each task is atomic, actionable, and build-order optimized.
+
+✅ PART 1 — CORE MVP EXECUTION CHECKLIST
+PHASE 1 — Foundation Setup
+Backend Setup
+ Initialize Node.js project (server/)
+ Install dependencies:
+express
+mongoose
+cors
+dotenv
+jsonwebtoken
+multer
+csv/xlsx parser (xlsx or csv-parser)
+twilio
+new twilio
+
+ Create base folder structure:
+
+server/
+  controllers/
+  models/
+  routes/
+  services/
+  middleware/
+  utils/
+  jobs/
+  config/
+ Create server.js or index.js
+ Setup Express app
+ Add middleware:
+JSON parser
+CORS
+ Setup environment config (.env)
+ Connect MongoDB (Mongoose connection)
+ Create /api/health test route
+Frontend Setup
+ Create React + Vite app (client/)
+ Clean default files
+
+ Setup folder structure:
+
+src/
+  components/
+  pages/
+  services/
+  hooks/
+  context/
+ Setup routing (React Router)
+ Create base layout (Sidebar + Chat Panel)
+ Add environment config (VITE_API_URL)
+
+PHASE 2 — Authentication
+Backend
+ Create admin login route /api/auth/login
+ Implement JWT generation
+ Create auth middleware
+ Protect private routes
+Frontend
+ Create Login page UI
+ Implement login API call
+ Store JWT in localStorage
+ Setup auth context/provider
+ Protect routes
+ Implement logout
+ 
+PHASE 3 — Contact Import System
+Backend
+ Create Contact model
+ Create UploadBatch model
+ Implement file upload middleware (multer)
+ Create /upload-preview endpoint:
+parse file
+validate rows
+normalize phone numbers
+detect duplicates
+ Create /import endpoint:
+insert valid contacts
+assign uploadBatchId
+ Implement phone normalization utility
+Frontend
+ Create Upload page UI
+ Add file picker
+ Call preview API
+ Show preview table:
+valid rows
+invalid rows
+ Add confirm import button
+ Handle import response
+
+PHASE 4 — Contact Management
+Backend
+ Create /api/contacts (GET with pagination)
+ Add search functionality
+ Add filters (status-based)
+ Create /api/contacts/:id endpoint
+Frontend
+ Create Contacts list page
+ Add pagination UI
+ Add search input
+ Add filters dropdown
+ Create Contact detail panel
+
+PHASE 5 — Twilio SMS Sending
+Backend
+ Setup Twilio client
+ Create SMS service (sendMessage function)
+ Create manual send endpoint:
+/api/messages/send
+ Save outbound message to DB
+ Store Twilio message SID
+ Handle send errors
+Frontend
+ Add "Send Message" input in chat UI
+ Call send API
+ Append message to chat thread
+
+PHASE 6 — Conversations & Messages
+Backend
+ Create Conversation model
+ Create SMSMessage model
+ Auto-create conversation on first message
+ Create:
+/api/conversations
+/api/conversations/:contactId/messages
+ Update conversation metadata:
+lastMessage
+lastMessageAt
+Frontend
+ Build sidebar (chat list)
+ Show:
+contact name
+last message
+timestamp
+ Load messages on click
+ Render chat bubbles
+
+PHASE 7 — Inbound SMS Webhook
+Backend
+ Create Twilio webhook endpoint:
+/api/webhooks/twilio/inbound
+ Parse incoming message
+ Match contact via phone
+ Save inbound message
+ Update conversation
+ Mark conversation as "replied"
+ Stop automation (flag contact/enrollment)
+ Handle unknown numbers
+
+PHASE 8 — Automation Engine (MVP)
+Backend
+Models
+ Create Campaign model (fixed 4 messages)
+ Create AutomationSettings model
+ Create Enrollment model
+APIs
+ Create:
+/api/campaign
+/api/settings
+ Add update endpoints
+Scheduler
+ Create background worker (cron or interval)
+ Implement logic:
+fetch active enrollments
+check time window
+check wait time
+send next message
+update step
+set nextSendAt
+Logic Rules
+ Stop if:
+reply received
+final step completed
+failure threshold hit
+
+PHASE 9 — Inbox UI (WhatsApp Style)
+Frontend
+ Finalize sidebar UI
+ Highlight active conversation
+ Show unread indicators
+ Show incoming vs outgoing styles
+ Add message input box
+ Implement send button
+ Add auto-scroll to latest message
+ Add refresh/polling
+
+PHASE 10 — Sequence Tracking
+Backend
+ Store currentStep in enrollment
+ Link stepNumber in messages
+ Update enrollment after each send
+Frontend
+ Show:
+current step
+status (active/replied/completed)
+ Display step tags in chat (optional)
+
+PHASE 11 — Logging & Error Handling
+Backend
+ Create SystemLog model
+ Log:
+send failures
+invalid uploads
+webhook errors
+ Add try/catch to all critical flows
+Frontend
+ Show basic error alerts
+ Add loading states
+
+PHASE 12 — Demo Preparation
+ Seed demo contacts
+ Test full flow:
+upload → import → send → reply → stop → manual reply
+ Clean UI text
+ Fix bugs
+ Deploy on VPS (Docker optional)
+ Verify Twilio webhook URLs
+
+🚀 PART 1 DONE → DEMO READY SYSTEM
+
+
+
+✅ PART 2 — ADVANCED SYSTEM CHECKLIST
+
+PHASE 1 — Flexible Campaign System
+ Convert fixed 4-message into dynamic sequence array
+ Add per-step delay config
+ Allow multiple campaigns
+ Assign contacts to campaigns
+
+PHASE 2 — Advanced Scheduler & Queue
+ Introduce queue system (BullMQ or similar)
+ Add rate limiting
+ Add random delays
+ Add retry logic
+ Prevent duplicate sends (locking)
+
+PHASE 3 — Delivery Status Tracking
+ Create Twilio status webhook
+ Update message status in DB
+ Track:
+delivered
+failed
+ Show status in UI
+
+PHASE 4 — Opt-Out Compliance
+ Detect STOP keywords
+ Mark contact as opted_out
+ Block future sends
+ Add UI badge
+ Add manual opt-out toggle
+
+PHASE 5 — Multi-User System
+ Create User model
+ Add roles (admin, agent)
+ Assign conversations
+ Add activity logs
+
+PHASE 6 — Advanced Contact Management
+ Add tags system
+ Add notes system
+ Add edit contact feature
+ Add duplicate merge logic
+ Add export contacts
+
+PHASE 7 — Inbox Enhancements
+ Add real-time updates (WebSocket)
+ Add message search
+ Add filters (unread, replied)
+ Add quick reply templates
+
+PHASE 8 — Analytics Dashboard
+ Build metrics APIs:
+sent
+delivered
+replies
+failures
+ Add date filters
+ Create dashboard UI
+
+PHASE 9 — Template System
+ Implement variable replacement
+ Add template library
+ Add preview before send
+
+PHASE 10 — Monitoring & Logs
+ Build logs UI
+ Add webhook retry handling
+ Add failure dashboard
+
+PHASE 11 — Security & Hardening
+ Add rate limiting
+ Secure webhooks
+ Add input validation
+ Improve JWT security
+ Add DB indexes
+
+PHASE 12 — Expansion Features
+ Add MMS support
+ Add campaign cloning
+ Add A/B testing
+ Add external API access
