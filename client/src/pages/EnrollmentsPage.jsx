@@ -25,7 +25,7 @@ export default function EnrollmentsPage() {
       setLoading(true);
       setError("");
 
-      const data = await apiFetch("/api/enrollments");
+      const data = await apiFetch("/enrollments");
       const items = data.items || [];
 
       setEnrollments(items);

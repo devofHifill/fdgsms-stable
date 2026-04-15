@@ -27,7 +27,7 @@ export default function CampaignsPage() {
       setLoading(true);
       setError("");
 
-      const data = await apiFetch("/api/campaigns");
+      const data = await apiFetch("/campaigns");
       setCampaigns(data.items || []);
     } catch (err) {
       setError(err.message || "Failed to load campaigns");
@@ -97,7 +97,7 @@ export default function CampaignsPage() {
         })),
       };
 
-      await apiFetch("/api/campaigns", {
+      await apiFetch("/campaigns", {
         method: "POST",
         body: JSON.stringify(payload),
       });

@@ -40,7 +40,7 @@ export default function LogsPage() {
         search: nextFilters.search,
       });
 
-      const data = await apiFetch(`/api/logs?${params.toString()}`);
+      const data = await apiFetch(`/logs?${params.toString()}`);
       setLogs(data.items || []);
       setPagination(data.pagination || {});
     } catch (err) {

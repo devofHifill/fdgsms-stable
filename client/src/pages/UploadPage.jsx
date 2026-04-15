@@ -31,7 +31,7 @@ export default function UploadPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const data = await apiFetch("/api/contact-import/upload-preview", {
+      const data = await apiFetch("/contact-import/upload-preview", {
         method: "POST",
         body: formData,
       });
@@ -55,7 +55,7 @@ export default function UploadPage() {
       setError("");
       setSuccess("");
 
-      const data = await apiFetch("/api/contact-import/import", {
+      const data = await apiFetch("/contact-import/import", {
         method: "POST",
         body: JSON.stringify({
           batchId: preview.batchId,

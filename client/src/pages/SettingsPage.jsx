@@ -21,7 +21,7 @@ export default function SettingsPage() {
       setLoading(true);
       setError("");
 
-      const data = await apiFetch("/api/settings");
+      const data = await apiFetch("/settings");
 
       setForm({
         enabled: Boolean(data.enabled),
@@ -59,7 +59,7 @@ export default function SettingsPage() {
         maxMessagesPerRun: Number(form.maxMessagesPerRun),
       };
 
-      await apiFetch("/api/settings", {
+      await apiFetch("/settings", {
         method: "PUT",
         body: JSON.stringify(payload),
       });

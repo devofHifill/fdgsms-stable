@@ -24,35 +24,59 @@ services:
     environment:
       PORT: 4000
       MONGO_URI: mongodb://FDGadmin:fdgmongo123@mongodb:27017/fdgsms?authSource=admin
-      CLIENT_URL: http://76.13.242.148:5175
+      CLIENT_URL: https://fdgsms.filldesigngroup.cloud
 
-      JWT_SECRET: gzzpzcMqX7MQMHbO608OjlofodDWiA4FimRMcHMQKM2
-      ADMIN_EMAIL: dev.filldesigngroup@gmail.com
-      ADMIN_PASSWORD: Testnet1@23!
+      JWT_SECRET: 
+      ADMIN_EMAIL: 
+      ADMIN_PASSWORD: 
 
       TWILIO_ACCOUNT_SID: 
       TWILIO_AUTH_TOKEN: 
       TWILIO_PHONE_NUMBER: 
+
     depends_on:
       - mongodb
     networks:
       - fdgsms-net
+      - n8n_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=n8n_default"
+      - "traefik.http.routers.fdgsms-api.rule=Host(`fdgsms.filldesigngroup.cloud`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.fdgsms-api.entrypoints=web,websecure"
+      - "traefik.http.routers.fdgsms-api.tls=true"
+      - "traefik.http.routers.fdgsms-api.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.fdgsms-api.priority=100"
+      - "traefik.http.services.fdgsms-api.loadbalancer.server.port=4000"
 
   client:
     build:
       context: ./client
       args:
-        VITE_API_URL: http://76.13.242.148:5000
+        VITE_API_URL: /api
     container_name: fdgsms-client
     restart: unless-stopped
     ports:
       - "5175:3000"
     depends_on:
       - server
+    networks:
+      - fdgsms-net
+      - n8n_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=n8n_default"
+      - "traefik.http.routers.fdgsms.rule=Host(`fdgsms.filldesigngroup.cloud`)"
+      - "traefik.http.routers.fdgsms.entrypoints=web,websecure"
+      - "traefik.http.routers.fdgsms.tls=true"
+      - "traefik.http.routers.fdgsms.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.fdgsms.loadbalancer.server.port=3000"
 
 networks:
   fdgsms-net:
     driver: bridge
+  n8n_default:
+    external: true
 
 volumes:
   mongo_data:

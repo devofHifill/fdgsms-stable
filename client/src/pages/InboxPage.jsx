@@ -13,7 +13,7 @@ export default function InboxPage() {
 
   async function loadEnrollment(contactId) {
     try {
-      const data = await apiFetch(`/api/enrollments/contact/${contactId}`);
+      const data = await apiFetch(`/enrollments/contact/${contactId}`);
       setEnrollment(data);
     } catch {
       setEnrollment(null);
@@ -21,13 +21,13 @@ export default function InboxPage() {
   }
   // Load conversations
   async function loadConversations() {
-    const data = await apiFetch("/api/conversations");
+    const data = await apiFetch("/conversations");
     setConversations(data.items || []);
   }
 
   // Load messages
   async function loadMessages(contactId) {
-    const data = await apiFetch(`/api/conversations/${contactId}/messages`);
+    const data = await apiFetch(`/conversations/${contactId}/messages`);
     setMessages(data.items || []);
   }
 
@@ -45,7 +45,7 @@ export default function InboxPage() {
     e.preventDefault();
     if (!text.trim() || !active) return;
 
-    const res = await apiFetch("/api/messages/send", {
+    const res = await apiFetch("/messages/send", {
       method: "POST",
       body: JSON.stringify({
         contactId: active.contactId,

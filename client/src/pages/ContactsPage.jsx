@@ -56,7 +56,7 @@ export default function ContactsPage() {
         status: nextStatus,
       });
 
-      const data = await apiFetch(`/api/contacts?${params.toString()}`);
+      const data = await apiFetch(`/contacts?${params.toString()}`);
       setContacts(data.items || []);
       setPagination(data.pagination);
     } catch (err) {
@@ -68,7 +68,7 @@ export default function ContactsPage() {
 
   async function fetchCampaigns() {
     try {
-      const data = await apiFetch("/api/campaigns");
+      const data = await apiFetch("/campaigns");
       setCampaigns(data.items || []);
     } catch (err) {
       setError(err.message || "Failed to load campaigns");
@@ -80,7 +80,7 @@ export default function ContactsPage() {
       setLoadingDetails(true);
       setError("");
 
-      const data = await apiFetch(`/api/contacts/${id}`);
+      const data = await apiFetch(`/contacts/${id}`);
       setSelectedContact(data);
     } catch (err) {
       setError(err.message || "Failed to load contact details");
@@ -94,7 +94,7 @@ export default function ContactsPage() {
       setLoadingMessages(true);
       setError("");
 
-      const data = await apiFetch(`/api/messages/contact/${contactId}`);
+      const data = await apiFetch(`/messages/contact/${contactId}`);
       setMessages(data.items || []);
     } catch (err) {
       setError(err.message || "Failed to load messages");
@@ -133,7 +133,7 @@ export default function ContactsPage() {
         body: messageText.trim(),
       };
 
-      const data = await apiFetch("/api/messages/send", {
+      const data = await apiFetch("/messages/send", {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -164,7 +164,7 @@ export default function ContactsPage() {
       setError("");
       setSuccess("");
 
-      await apiFetch("/api/enrollments", {
+      await apiFetch("/enrollments", {
         method: "POST",
         body: JSON.stringify({
           contactId: selectedContact._id,
@@ -217,7 +217,7 @@ export default function ContactsPage() {
       setError("");
       setSuccess("");
 
-      const data = await apiFetch("/api/enrollments/bulk", {
+      const data = await apiFetch("/enrollments/bulk", {
         method: "POST",
         body: JSON.stringify({
           contactIds: selectedContactIds,
