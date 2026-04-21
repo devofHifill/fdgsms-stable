@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../services/api";
+import AppLayout from "../components/AppLayout";
 
 export default function SettingsPage() {
   const [form, setForm] = useState({
@@ -74,96 +75,98 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="campaigns-page">
-      <div className="page-header-row">
-        <div>
-          <h1>Automation Settings</h1>
-          <p>Control global automation behavior and sending limits.</p>
+    <AppLayout>
+      <div className="campaigns-page">
+        <div className="page-header-row">
+          <div>
+            <h1>Automation Settings</h1>
+            <p>Control global automation behavior and sending limits.</p>
+          </div>
         </div>
+
+        {error ? <p className="status-error">{error}</p> : null}
+        {success ? <p className="status-success">{success}</p> : null}
+
+        <section className="card settings-card">
+          {loading ? (
+            <p>Loading settings...</p>
+          ) : (
+            <form className="campaign-form" onSubmit={handleSubmit}>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={form.enabled}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, enabled: e.target.checked }))
+                  }
+                />
+                <span>Automation enabled</span>
+              </label>
+
+              <div className="settings-grid">
+                <label className="field-block">
+                  <span>Start Hour</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="23"
+                    value={form.sendingWindow.startHour}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        sendingWindow: {
+                          ...prev.sendingWindow,
+                          startHour: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="field-block">
+                  <span>End Hour</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="23"
+                    value={form.sendingWindow.endHour}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        sendingWindow: {
+                          ...prev.sendingWindow,
+                          endHour: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="field-block">
+                  <span>Max Messages Per Run</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.maxMessagesPerRun}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        maxMessagesPerRun: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" disabled={saving}>
+                  {saving ? "Saving..." : "Save Settings"}
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
       </div>
-
-      {error ? <p className="status-error">{error}</p> : null}
-      {success ? <p className="status-success">{success}</p> : null}
-
-      <section className="card settings-card">
-        {loading ? (
-          <p>Loading settings...</p>
-        ) : (
-          <form className="campaign-form" onSubmit={handleSubmit}>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, enabled: e.target.checked }))
-                }
-              />
-              <span>Automation enabled</span>
-            </label>
-
-            <div className="settings-grid">
-              <label className="field-block">
-                <span>Start Hour</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="23"
-                  value={form.sendingWindow.startHour}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      sendingWindow: {
-                        ...prev.sendingWindow,
-                        startHour: e.target.value,
-                      },
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="field-block">
-                <span>End Hour</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="23"
-                  value={form.sendingWindow.endHour}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      sendingWindow: {
-                        ...prev.sendingWindow,
-                        endHour: e.target.value,
-                      },
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="field-block">
-                <span>Max Messages Per Run</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={form.maxMessagesPerRun}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      maxMessagesPerRun: e.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-
-            <div className="form-actions">
-              <button type="submit" disabled={saving}>
-                {saving ? "Saving..." : "Save Settings"}
-              </button>
-            </div>
-          </form>
-        )}
-      </section>
-    </div>
+    </AppLayout>
   );
 }

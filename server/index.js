@@ -31,6 +31,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
+
 import healthRoutes from "./routes/healthRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import protectedRoutes from "./routes/protectedRoutes.js";
@@ -41,14 +42,16 @@ import conversationRoutes from "./routes/conversationRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
 import campaignRoutes from "./routes/campaignRoutes.js";
 import enrollmentRoutes from "./routes/enrollmentRoutes.js";
-import { runAutomationCycle } from "./jobs/automationWorker.js";
 import automationSettingsRoutes from "./routes/automationSettingsRoutes.js";
 import systemLogRoutes from "./routes/systemLogRoutes.js";
+
+import { runAutomationCycle } from "./jobs/automationWorker.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const AUTOMATION_INTERVAL_MS = 60000;
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -73,8 +76,8 @@ app.use(
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.get("/", (req, res) => {
   res.json({ message: "Welcome to FDGSMS backend" });
@@ -96,14 +99,21 @@ app.use("/api/logs", systemLogRoutes);
 async function startServer() {
   await connectDB();
 
-  setInterval(() => {
-    runAutomationCycle();
-  }, 15000);
-
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log("Allowed CORS origins:", allowedOrigins);
   });
+
+  setInterval(() => {
+    runAutomationCycle().catch((error) => {
+      console.error("Automation interval error:", error);
+    });
+  }, AUTOMATION_INTERVAL_MS);
+
+  return server;
 }
 
-startServer();
+startServer().catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
+});

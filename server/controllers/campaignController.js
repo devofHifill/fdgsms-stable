@@ -1,3 +1,17 @@
+// campaignController.js → campaign management
+
+// Work: Creates and manages SMS campaigns.
+
+// Usually does:
+// create campaign
+// get all campaigns
+// update campaign
+// delete campaign
+// store campaign steps/messages
+// In FDGSMS:
+
+// This is where your 4-message or sequence-based campaign logic is defined.
+
 import Campaign from "../models/Campaign.js";
 
 export async function createCampaign(req, res) {

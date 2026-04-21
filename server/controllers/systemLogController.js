@@ -1,3 +1,17 @@
+// systemLogController.js → logs and debugging
+
+// Work: Returns system logs for monitoring.
+
+// Usually does:
+// fetch logs
+// filter by level/category
+// paginate logs
+// help debug failures
+// In FDGSMS:
+
+// This helps you inspect things like send failures, webhook errors, automation issues, etc.
+
+
 import SystemLog from "../models/SystemLog.js";
 
 export async function getSystemLogs(req, res) {

@@ -57,6 +57,47 @@ const contactSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+
+    // 🔍 LINE TYPE INTELLIGENCE
+    lineTypeRaw: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    lineTypeNormalized: {
+      type: String,
+      default: "",
+      trim: true,
+      lowercase: true,
+    },
+    lineTypeStatus: {
+      type: String,
+      enum: ["allowed", "blocked", "unknown"],
+      default: "unknown",
+      index: true,
+    },
+
+    // 🚀 PERFORMANCE FIELD
+    isSmsEligible: {
+      type: Boolean,
+      default: null,
+      index: true,
+    },
+
+    // ⏱ LOOKUP TRACKING
+    lineTypeCheckedAt: {
+      type: Date,
+      default: null,
+    },
+    lookupLastAttemptAt: {
+      type: Date,
+      default: null,
+    },
+    lookupLastError: {
+      type: String,
+      default: "",
+    },
+
     isDeleted: {
       type: Boolean,
       default: false,
@@ -67,6 +108,8 @@ const contactSchema = new mongoose.Schema(
   }
 );
 
+// INDEXES
 contactSchema.index({ normalizedPhone: 1 }, { unique: true });
+contactSchema.index({ lineTypeStatus: 1 });
 
 export default mongoose.model("Contact", contactSchema);

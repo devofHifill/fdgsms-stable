@@ -1,3 +1,18 @@
+// conversationController.js → inbox conversation list
+
+// Work: Manages chat/conversation-level data.
+
+    // Usually does:
+    // return conversation list
+    // return latest message preview
+    // sort by recent activity
+    // return conversation thread by contact
+    
+// In FDGSMS:
+
+// This powers the Inbox sidebar and helps show one thread per contact.
+
+
 import Conversation from "../models/Conversation.js";
 import SMSMessage from "../models/SMSMessage.js";
 import Contact from "../models/Contact.js";

@@ -39,20 +39,45 @@ export async function lookupPhoneNumber(to) {
   };
 }
 
+// export async function sendSMS({ to, body }) {
+//   const from = process.env.TWILIO_PHONE_NUMBER;
+
+//   if (!from) {
+//     throw new Error("TWILIO_PHONE_NUMBER is not configured");
+//   }
+
+//   const client = getTwilioClient();
+
+//   const result = await client.messages.create({
+//     from,
+//     to,
+//     body,
+//   });
+
+//   return result;
+// }
+
 export async function sendSMS({ to, body }) {
+  const client = getTwilioClient();
+
+  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
   const from = process.env.TWILIO_PHONE_NUMBER;
+
+  if (messagingServiceSid) {
+    return await client.messages.create({
+      messagingServiceSid,
+      to,
+      body,
+    });
+  }
 
   if (!from) {
     throw new Error("TWILIO_PHONE_NUMBER is not configured");
   }
 
-  const client = getTwilioClient();
-
-  const result = await client.messages.create({
+  return await client.messages.create({
     from,
     to,
     body,
   });
-
-  return result;
 }

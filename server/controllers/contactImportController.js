@@ -1,9 +1,24 @@
+// contactImportController.js → upload contacts
+
+// Work: Handles file import of contacts.
+
+    // Usually does:
+    // receive CSV/XLSX upload
+    // parse rows
+    // validate required fields
+    // normalize phone numbers
+    // detect duplicates
+    // preview valid/invalid rows
+    // import approved rows into DB
+// In FDGSMS:
+
+// This is the controller that powers your Upload / Import Contacts page.
+
 import Contact from "../models/Contact.js";
 import UploadBatch from "../models/UploadBatch.js";
 import { parseContactFile } from "../utils/parseContactFile.js";
-import { normalizePhone, isValidNormalizedPhone } from "../utils/phone.js";
+import { getPhoneValidationResult } from "../utils/phone.js";
 import { createSystemLog } from "../services/systemLogService.js";
-
 
 function buildFullName(firstName, lastName, fullName) {
   if (fullName?.trim()) return fullName.trim();
@@ -40,7 +55,8 @@ export async function uploadPreview(req, res) {
 
     for (let i = 0; i < parsedRows.length; i += 1) {
       const raw = parsedRows[i];
-      const normalizedPhone = normalizePhone(raw.phone);
+      const phoneCheck = getPhoneValidationResult(raw.phone);
+      const normalizedPhone = phoneCheck.normalizedPhone;
       const fullName = buildFullName(
         raw.firstName,
         raw.lastName,
@@ -59,19 +75,15 @@ export async function uploadPreview(req, res) {
 
       const errors = [];
 
-      if (!rowData.phone) {
-        errors.push("Phone is required");
+      if (!phoneCheck.ok) {
+        errors.push(phoneCheck.reason);
       }
 
-      if (!normalizedPhone || !isValidNormalizedPhone(normalizedPhone)) {
-        errors.push("Phone format is invalid");
-      }
-
-      if (existingPhones.has(normalizedPhone)) {
+      if (normalizedPhone && existingPhones.has(normalizedPhone)) {
         errors.push("Phone already exists in database");
       }
 
-      if (seenInFile.has(normalizedPhone)) {
+      if (normalizedPhone && seenInFile.has(normalizedPhone)) {
         errors.push("Duplicate phone in uploaded file");
       }
 
@@ -179,9 +191,7 @@ export async function importContacts(req, res) {
         category: "upload",
         event: "contacts_import_missing_rows",
         message: "Contacts import requested without validRows",
-        metadata: {
-          batchId,
-        },
+        metadata: { batchId },
       });
 
       return res.status(400).json({
@@ -197,33 +207,87 @@ export async function importContacts(req, res) {
         category: "upload",
         event: "contacts_import_batch_not_found",
         message: "Contacts import failed because upload batch was not found",
-        metadata: {
-          batchId,
-        },
+        metadata: { batchId },
       });
 
       return res.status(404).json({ message: "Upload batch not found" });
     }
 
-    const docs = validRows.map((row) => ({
-      firstName: row.firstName || "",
-      lastName: row.lastName || "",
-      fullName: row.fullName || "",
-      email: row.email || "",
-      phone: row.phone || "",
-      normalizedPhone: row.normalizedPhone || "",
-      source: "upload",
-      status: "new",
-      uploadBatchId: batch._id,
-    }));
+    const existingPhones = new Set(
+      (
+        await Contact.find(
+          { isDeleted: false },
+          { normalizedPhone: 1, _id: 0 }
+        ).lean()
+      ).map((item) => item.normalizedPhone)
+    );
+
+    const seenInImport = new Set();
+    const docs = [];
+    const failedRows = [];
+
+    for (const row of validRows) {
+      const firstName = row.firstName || "";
+      const lastName = row.lastName || "";
+      const fullName = buildFullName(firstName, lastName, row.fullName);
+      const email = String(row.email || "").trim().toLowerCase();
+      const phone = String(row.phone || "").trim();
+
+      const phoneCheck = getPhoneValidationResult(phone);
+      const normalizedPhone = phoneCheck.normalizedPhone;
+
+      const errors = [];
+
+      if (!phoneCheck.ok) {
+        errors.push(phoneCheck.reason);
+      }
+
+      if (!fullName) {
+        errors.push("Name is missing");
+      }
+
+      if (normalizedPhone && existingPhones.has(normalizedPhone)) {
+        errors.push("Phone already exists in database");
+      }
+
+      if (normalizedPhone && seenInImport.has(normalizedPhone)) {
+        errors.push("Duplicate phone in import payload");
+      }
+
+      if (errors.length > 0) {
+        failedRows.push({
+          rowNumber: row.rowNumber || null,
+          phone,
+          normalizedPhone,
+          reason: errors.join(", "),
+        });
+        continue;
+      }
+
+      docs.push({
+        firstName,
+        lastName,
+        fullName,
+        email,
+        phone,
+        normalizedPhone,
+        source: "upload",
+        status: "new",
+        uploadBatchId: batch._id,
+      });
+
+      seenInImport.add(normalizedPhone);
+      existingPhones.add(normalizedPhone);
+    }
 
     let insertedCount = 0;
-    const failedRows = [];
+    const insertedItems = [];
 
     for (const doc of docs) {
       try {
-        await Contact.create(doc);
+        const created = await Contact.create(doc);
         insertedCount += 1;
+        insertedItems.push(created);
       } catch (error) {
         failedRows.push({
           phone: doc.phone,
@@ -248,7 +312,9 @@ export async function importContacts(req, res) {
         importedCount: insertedCount,
         failedCount: failedRows.length,
         totalRequestedRows: validRows.length,
+        acceptedRows: docs.length,
         batchStatus: batch.status,
+        insertedContactIds: insertedItems.map((item) => item._id),
         failedRows,
       },
     });
@@ -259,6 +325,7 @@ export async function importContacts(req, res) {
       importedCount: insertedCount,
       failedCount: failedRows.length,
       failedRows,
+      items: insertedItems,
     });
   } catch (error) {
     console.error("Import contacts error:", error);

@@ -1,3 +1,18 @@
+// contactController.js → contact listing and detail
+
+// Work: Manages stored contacts.
+
+    // Usually does:
+    // get all contacts
+    // search contacts
+    // filter contacts
+    // paginate contacts
+    // get one contact by ID
+// In FDGSMS:
+
+// This powers the Contacts page where you browse, search, and inspect contacts.
+
+
 import Contact from "../models/Contact.js";
 
 function escapeRegex(value = "") {
@@ -7,7 +22,7 @@ function escapeRegex(value = "") {
 export async function getContacts(req, res) {
   try {
     const page = Math.max(Number(req.query.page) || 1, 1);
-    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 500);
     const skip = (page - 1) * limit;
 
     const search = String(req.query.search || "").trim();

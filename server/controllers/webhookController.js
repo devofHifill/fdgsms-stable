@@ -1,3 +1,19 @@
+// webhookController.js → handle inbound SMS
+
+// Work: Receives messages from Twilio webhooks.
+
+// Usually does:
+// receive inbound SMS from Twilio
+// read From, To, Body, MessageSid
+// find matching contact
+// save inbound message
+// update conversation
+// mark contact/conversation as replied
+// stop automation if needed
+// In FDGSMS:
+
+// This is what makes your platform two-way, so replies from users come into your system.
+
 import Contact from "../models/Contact.js";
 import SMSMessage from "../models/SMSMessage.js";
 import Conversation from "../models/Conversation.js";
@@ -20,7 +36,7 @@ export async function handleInboundSMS(req, res) {
         },
       });
 
-      return res.status(400).send("Missing required fields");
+      return res.status(200).send("OK");
     }
 
     const normalizedFrom = normalizePhone(From);
@@ -37,7 +53,7 @@ export async function handleInboundSMS(req, res) {
         },
       });
 
-      return res.status(400).send("Invalid sender phone number");
+      return res.status(200).send("OK");
     }
 
     const contact = await Contact.findOne({
@@ -60,7 +76,7 @@ export async function handleInboundSMS(req, res) {
         },
       });
 
-      return res.status(404).send("Contact not found");
+      return res.status(200).send("OK");
     }
 
     const inboundMessage = await SMSMessage.create({
@@ -72,12 +88,10 @@ export async function handleInboundSMS(req, res) {
       provider: "twilio",
       providerMessageSid: MessageSid || "",
       status: "received",
-
       enrollmentId: null,
       campaignId: null,
       stepNumber: null,
       messageType: "inbound",
-
       metadata: {
         from: From,
         to: To,
@@ -109,19 +123,21 @@ export async function handleInboundSMS(req, res) {
       },
     });
 
-    await Enrollment.updateMany(
+    const stopResult = await Enrollment.updateMany(
       {
         contactId: contact._id,
         status: "active",
       },
       {
-        status: "stopped",
-        stopReason: "replied",
-        replyDetectedAt: new Date(),
+        $set: {
+          status: "stopped",
+          stopReason: "replied",
+          replyDetectedAt: new Date(),
+          nextSendAt: null,
+        },
       }
     );
 
-    // ✅ SUCCESS LOG
     await createSystemLog({
       level: "info",
       category: "webhook",
@@ -133,6 +149,10 @@ export async function handleInboundSMS(req, res) {
         to: To,
         messageSid: MessageSid || "",
         bodyLength: Body?.length || 0,
+        stoppedEnrollments:
+          stopResult.modifiedCount ??
+          stopResult.nModified ??
+          0,
       },
     });
 
@@ -150,6 +170,6 @@ export async function handleInboundSMS(req, res) {
       },
     });
 
-    return res.status(500).send("Webhook error");
+    return res.status(200).send("OK");
   }
 }

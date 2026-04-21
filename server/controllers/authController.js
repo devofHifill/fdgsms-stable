@@ -1,3 +1,16 @@
+// authController.js → login / authentication
+
+// Work: Handles admin login.
+
+    // Usually does:
+    // receives email and password
+    // checks if credentials are correct
+    // creates JWT token
+    // sends token + user info back
+    // In FDGSMS:
+
+// This is what allows the admin to log into the dashboard securely.
+
 import jwt from "jsonwebtoken";
 
 export async function loginAdmin(req, res) {
