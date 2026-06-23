@@ -8,6 +8,7 @@ import { sendSMS } from "../services/twilioService.js";
 import { createSystemLog } from "../services/systemLogService.js";
 import { isValidNormalizedPhone } from "../utils/phone.js";
 import { resolveContactSmsEligibility } from "../services/phoneIntelligenceService.js";
+import { renderTemplate, buildContactTemplateVariables } from "../utils/template.js";
 
 function getSortedSteps(campaign) {
   return [...(campaign?.steps || [])].sort(
@@ -216,7 +217,33 @@ export async function runAutomationCycle() {
 
           continue;
         }
+        if (contact.lineTypeStatus === "blocked") {
+          enrollment.failureCount = (enrollment.failureCount || 0) + 1;
+          enrollment.lastError = `Blocked line type (${contact.lineTypeNormalized || contact.lineTypeRaw || "unknown"})`;
+          enrollment.status = "stopped";
+          enrollment.stopReason = "non_sms_number";
+          enrollment.nextSendAt = null;
 
+          await enrollment.save();
+
+          await createSystemLog({
+            level: "warn",
+            category: "automation",
+            event: "automation_blocked_line_type_cached",
+            message: "Automation stopped using cached blocked line type",
+            contactId: contact._id,
+            enrollmentId: enrollment._id,
+            campaignId: campaign._id,
+            metadata: {
+              phone: contact.normalizedPhone,
+              lineType: contact.lineTypeRaw || "",
+              normalizedLineType: contact.lineTypeNormalized || "",
+              source: "contact_cached_blocked_status",
+            },
+          });
+
+          continue;
+        }
         const eligibility = await resolveContactSmsEligibility(contact, {
           maxAgeDays: 30,
           allowStaleAllowedCacheOnLookupFailure: true,
@@ -277,18 +304,22 @@ export async function runAutomationCycle() {
           continue;
         }
 
+        let renderedBody = currentStep.body;
+
         try {
+          const templateVariables = buildContactTemplateVariables(contact);
+          renderedBody = renderTemplate(currentStep.body, templateVariables);
+
           const response = await sendSMS({
             to: contact.normalizedPhone,
-            body: currentStep.body,
+            body: renderedBody,
           });
-
           await SMSMessage.create({
             contactId: contact._id,
             phone: contact.phone,
             normalizedPhone: contact.normalizedPhone,
             direction: "outbound",
-            body: currentStep.body,
+            body: renderedBody,
             provider: "twilio",
             providerMessageSid: response.sid || "",
             status: response.status || "queued",
@@ -352,7 +383,7 @@ export async function runAutomationCycle() {
             phone: contact.phone,
             normalizedPhone: contact.normalizedPhone,
             direction: "outbound",
-            body: currentStep.body,
+            body: renderedBody,
             provider: "twilio",
             providerMessageSid: "",
             status: "failed",

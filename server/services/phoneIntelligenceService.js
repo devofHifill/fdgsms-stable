@@ -1,6 +1,6 @@
 import { lookupPhoneNumber } from "./twilioService.js";
 
-const ALLOWED_LINE_TYPES = new Set(["mobile", "fixed_voip"]);
+const ALLOWED_LINE_TYPES = new Set(["mobile"]);
 const DEFAULT_CACHE_DAYS = 30;
 
 export function normalizeLineType(value) {

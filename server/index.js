@@ -57,7 +57,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:3000",
-  "http://76.13.242.148:5175",
+  "http://82.25.109.223:5175",
   process.env.CLIENT_URL,
 ].filter(Boolean);
 
