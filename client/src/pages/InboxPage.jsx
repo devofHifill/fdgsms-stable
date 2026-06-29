@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { apiFetch } from "../services/api";
 import AppLayout from "../components/AppLayout";
 
@@ -180,6 +181,53 @@ export default function InboxPage() {
     [active, sending, text, loadConversations]
   );
 
+  const handleDeleteMessage = useCallback(
+    async (messageId) => {
+      if (!messageId) return;
+      if (!window.confirm("Delete this message? This cannot be undone.")) return;
+
+      try {
+        setError("");
+        await apiFetch(`/conversations/messages/${messageId}`, {
+          method: "DELETE",
+        });
+
+        setMessages((prev) => prev.filter((m) => m._id !== messageId));
+        await loadConversations();
+      } catch (err) {
+        setError(err.message || "Failed to delete message");
+      }
+    },
+    [loadConversations]
+  );
+
+  const handleDeleteConversation = useCallback(async () => {
+    if (!active?.contactId) return;
+
+    const name = active.contact?.fullName || "this contact";
+    if (
+      !window.confirm(
+        `Delete the entire conversation with ${name}? This removes all messages and cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setError("");
+      await apiFetch(`/conversations/${active.contactId}`, {
+        method: "DELETE",
+      });
+
+      setActive(null);
+      setMessages([]);
+      setEnrollment(null);
+      await loadConversations();
+    } catch (err) {
+      setError(err.message || "Failed to delete conversation");
+    }
+  }, [active, loadConversations]);
+
   const handleComposerKeyDown = useCallback(
     (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -284,7 +332,7 @@ export default function InboxPage() {
           {active ? (
             <>
               <div className="chat-header">
-                <div>
+                <div className="chat-header-main">
                   <div className="chat-title">{active.contact?.fullName}</div>
                   <div className="chat-subtitle">
                     {enrollment
@@ -292,6 +340,16 @@ export default function InboxPage() {
                       : "No active sequence"}
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  className="chat-delete-btn"
+                  onClick={handleDeleteConversation}
+                  title="Delete this conversation"
+                >
+                  <Trash2 size={16} />
+                  <span>Delete chat</span>
+                </button>
               </div>
 
               {error ? <div className="inbox-error-banner">{error}</div> : null}
@@ -305,6 +363,16 @@ export default function InboxPage() {
                       key={m._id}
                       className={`bubble ${m.direction === "outbound" ? "outbound" : "inbound"}`}
                     >
+                      <button
+                        type="button"
+                        className="bubble-delete-btn"
+                        onClick={() => handleDeleteMessage(m._id)}
+                        title="Delete this message"
+                        aria-label="Delete this message"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+
                       <div className="bubble-body">{m.body}</div>
 
                       <div className="bubble-meta">
