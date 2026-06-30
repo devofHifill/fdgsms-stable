@@ -1970,3 +1970,75 @@ input {
     max-width: 88%;
   }
 }
+
+/* ── Inbox delete controls ─────────────────────────────── */
+
+/* Lay out the chat header so the delete button sits opposite the title. */
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-header-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chat-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border: 1px solid #3a4a52;
+  border-radius: 8px;
+  background: transparent;
+  color: #f0a3a3;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.chat-delete-btn:hover {
+  background: #b3261e;
+  border-color: #b3261e;
+  color: #ffffff;
+}
+
+/* Per-message delete: hidden until the bubble is hovered. */
+.bubble {
+  position: relative;
+}
+
+.bubble-delete-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.bubble:hover .bubble-delete-btn,
+.bubble-delete-btn:focus-visible {
+  opacity: 1;
+}
+
+.bubble-delete-btn:hover {
+  background: #b3261e;
+  color: #ffffff;
+}
