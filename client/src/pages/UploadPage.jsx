@@ -131,11 +131,34 @@ export default function UploadPage() {
         </div>
 
         <div className="upload-card">
-          <input
-            type="file"
-            accept=".csv,.xlsx,.xls"
-            onChange={handleFileChange}
-          />
+          <label className="dropzone">
+            <div className="dz-ico">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5-5 5 5"/><path d="M12 5v12"/></svg>
+            </div>
+            <div className="dz-title">Drag &amp; drop your file here</div>
+            <div className="dz-sub">or click to browse — .csv, .xlsx, .xls (max 10MB)</div>
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={handleFileChange}
+              hidden
+            />
+          </label>
+
+          {file ? (
+            <div className="dz-file">
+              <div className="dz-file-main">
+                <span className="row-avatar">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                </span>
+                <div>
+                  <div className="t-primary">{file.name}</div>
+                  <div className="t-sub">{(file.size / 1024).toFixed(0)} KB</div>
+                </div>
+              </div>
+              <span className="status-badge status-active">Ready</span>
+            </div>
+          ) : null}
 
           <div className="upload-enroll-box">
             <label className="checkbox-row">
@@ -168,6 +191,7 @@ export default function UploadPage() {
             </button>
 
             <button
+              type="submit"
               onClick={handleImport}
               disabled={importing || !preview?.validRows?.length}
             >
