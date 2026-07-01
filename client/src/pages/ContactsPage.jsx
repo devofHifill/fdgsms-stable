@@ -13,6 +13,15 @@ const STATUS_OPTIONS = [
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 250, 500];
 
+function getInitials(name) {
+  const s = String(name || "").trim();
+  if (!s) return "?";
+  const parts = s.split(/\s+/);
+  return (
+    ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || "?"
+  );
+}
+
 export default function ContactsPage() {
   const [contacts, setContacts] = useState([]);
   const [pagination, setPagination] = useState({
@@ -407,7 +416,16 @@ export default function ContactsPage() {
                             />
                           </td>
 
-                          <td>{contact.fullName || "-"}</td>
+                          <td>
+                            <div className="cell-id">
+                              <span className="row-avatar">
+                                {getInitials(contact.fullName)}
+                              </span>
+                              <span className="t-primary">
+                                {contact.fullName || "-"}
+                              </span>
+                            </div>
+                          </td>
                           <td>{contact.email || "-"}</td>
                           <td>{contact.phone || "-"}</td>
                           <td>

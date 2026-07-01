@@ -44,36 +44,69 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="login-page">
-      <form className="login-card" onSubmit={handleSubmit}>
-        <h1>FDGSMS Admin Login</h1>
+    <div className="auth">
+      <aside className="auth-side">
+        <div className="auth-brand">
+          <div className="brand-mark">F</div>
+          <div className="brand-text">
+            <span className="brand-name">FDGSMS</span>
+            <span className="brand-sub">SMS Automation</span>
+          </div>
+        </div>
 
-        <label>Email</label>
-        <input
-          type="email"
-          name="email"
-          value={form.email}
-          onChange={handleChange}
-          placeholder="Enter admin email"
-          required
-        />
+        <div className="auth-hero">
+          <h2>Two-way SMS automation that converts.</h2>
+          <p>
+            Run drip campaigns, manage replies in a unified inbox, and track
+            every enrollment — all in one place.
+          </p>
+          <div className="auth-features">
+            <div className="auth-feature">
+              <span className="dot" /> Automated multi-step sequences
+            </div>
+            <div className="auth-feature">
+              <span className="dot" /> WhatsApp-style two-way inbox
+            </div>
+            <div className="auth-feature">
+              <span className="dot" /> Real-time delivery &amp; reply tracking
+            </div>
+          </div>
+        </div>
 
-        <label>Password</label>
-        <input
-          type="password"
-          name="password"
-          value={form.password}
-          onChange={handleChange}
-          placeholder="Enter password"
-          required
-        />
+        <div className="auth-copy">© 2026 Fill Design Group</div>
+      </aside>
 
-        {error ? <p className="login-error">{error}</p> : null}
+      <main className="auth-main">
+        <form className="login-card" onSubmit={handleSubmit}>
+          <h1>Welcome back</h1>
 
-        <button type="submit" disabled={loading}>
-          {loading ? "Signing in..." : "Login"}
-        </button>
-      </form>
+          <label>Email</label>
+          <input
+            type="email"
+            name="email"
+            value={form.email}
+            onChange={handleChange}
+            placeholder="Enter admin email"
+            required
+          />
+
+          <label>Password</label>
+          <input
+            type="password"
+            name="password"
+            value={form.password}
+            onChange={handleChange}
+            placeholder="Enter password"
+            required
+          />
+
+          {error ? <p className="login-error">{error}</p> : null}
+
+          <button type="submit" disabled={loading}>
+            {loading ? "Signing in..." : "Login"}
+          </button>
+        </form>
+      </main>
     </div>
   );
 }

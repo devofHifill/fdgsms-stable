@@ -598,11 +598,97 @@ p.status-success {
 .login-error { background: var(--danger-tint); color: var(--danger); padding: 10px 14px; border-radius: var(--r-sm); margin: 0; }
 
 /* ---------------------------------------------------------
+   16b. Demo layout components
+   --------------------------------------------------------- */
+
+/* Stat cards with icon chips (dashboard / enrollments / logs) */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s5); margin-bottom: var(--s6); }
+.stat {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  box-shadow: var(--shadow); padding: var(--s5); display: flex; gap: var(--s4); align-items: flex-start;
+}
+.stat-ico { width: 42px; height: 42px; border-radius: var(--r); display: grid; place-items: center; flex-shrink: 0; }
+.stat-ico svg { width: 20px; height: 20px; }
+.stat-ico.is-primary { background: var(--primary-tint); color: var(--primary); }
+.stat-ico.is-success { background: var(--success-tint); color: var(--success); }
+.stat-ico.is-info { background: var(--info-tint); color: var(--info); }
+.stat-ico.is-warn { background: var(--warn-tint); color: var(--warn); }
+.stat-ico.is-danger { background: var(--danger-tint); color: var(--danger); }
+.stat-ico.is-neutral { background: var(--neutral-tint); color: var(--muted); }
+.stat-body { min-width: 0; }
+.stat-label { font-size: 12.5px; color: var(--muted); }
+.stat-value { font-size: 28px; font-weight: 800; margin-top: 2px; letter-spacing: -0.5px; }
+.stat-delta { font-size: 12px; font-weight: 600; margin-top: 4px; }
+.stat-delta.up { color: var(--success); }
+.stat-delta.down { color: var(--danger); }
+
+/* Avatar chips in tables/lists */
+.row-avatar {
+  width: 34px; height: 34px; border-radius: var(--r-pill); flex-shrink: 0;
+  display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #fff;
+  background: linear-gradient(135deg, #475569, #334155);
+}
+.cell-id { display: flex; align-items: center; gap: var(--s3); }
+.cell-id .t-primary { font-weight: 600; }
+.cell-id .t-sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
+
+/* Dashboard KPI extras: chart + side lists */
+.dash-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--s6); align-items: start; }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); margin-bottom: var(--s5); }
+.card-title { font-size: 16px; font-weight: 700; }
+.card-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.bar-chart { display: flex; align-items: flex-end; gap: 14px; height: 170px; padding-top: var(--s2); }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.bar-track { width: 100%; display: flex; gap: 5px; align-items: flex-end; justify-content: center; height: 140px; }
+.bar { width: 16px; border-radius: 6px; background: var(--primary); }
+.bar.alt { background: var(--success); }
+.bar-label { font-size: 11px; color: var(--muted); }
+.list-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.list-row + .list-row { margin-top: var(--s4); }
+.list-left { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+a.list-row { border-radius: var(--r-sm); padding: 8px; margin: 0 -8px; transition: background 0.12s; }
+a.list-row:hover { background: var(--hover); }
+a.list-row + a.list-row { margin-top: var(--s2); }
+.muted { color: var(--muted); }
+.stack > * + * { margin-top: var(--s3); }
+
+/* Upload dropzone */
+.dropzone {
+  display: block; border: 2px dashed var(--border-2); border-radius: var(--r-lg);
+  padding: var(--s10) var(--s6); text-align: center; cursor: pointer;
+  background: var(--surface-2); transition: border-color 0.14s, background 0.14s;
+}
+.dropzone:hover { border-color: var(--primary); background: var(--hover); }
+.dropzone .dz-ico { width: 46px; height: 46px; margin: 0 auto var(--s3); border-radius: var(--r); display: grid; place-items: center; background: var(--primary-tint); color: var(--primary); }
+.dropzone .dz-title { font-weight: 600; }
+.dropzone .dz-sub { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+.dz-file { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 12px 14px; }
+.dz-file .dz-file-main { display: flex; align-items: center; gap: var(--s3); }
+.dz-file .row-avatar { border-radius: var(--r); background: var(--info-tint); color: var(--info); }
+
+/* Auth split-screen (login) */
+.auth { min-height: 100vh; display: grid; grid-template-columns: 1.05fr 1fr; }
+.auth-side {
+  background: linear-gradient(150deg, #312e81, #1e1b4b 65%); color: #fff;
+  padding: var(--s10); display: flex; flex-direction: column; justify-content: space-between;
+}
+.auth-brand { display: flex; align-items: center; gap: var(--s3); }
+.auth-brand .brand-name { color: #fff; }
+.auth-brand .brand-sub { color: rgba(255,255,255,0.7); }
+.auth-hero h2 { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; }
+.auth-hero p { color: rgba(255, 255, 255, 0.82); font-size: 15px; margin-top: var(--s3); max-width: 420px; }
+.auth-features { display: grid; gap: var(--s3); margin-top: var(--s6); }
+.auth-feature { display: flex; gap: var(--s3); align-items: center; color: rgba(255, 255, 255, 0.9); font-size: 14px; }
+.auth-feature .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); flex-shrink: 0; }
+.auth-copy { color: rgba(255, 255, 255, 0.55); font-size: 12.5px; }
+.auth-main { display: grid; place-items: center; padding: var(--s8); background: var(--bg); }
+
+/* ---------------------------------------------------------
    17. Responsive
    --------------------------------------------------------- */
 @media (max-width: 1100px) {
-  .enrollment-stats, .logs-stats { grid-template-columns: repeat(2, 1fr); }
-  .contacts-layout, .enrollments-layout, .logs-layout, .campaigns-layout { grid-template-columns: 1fr; }
+  .enrollment-stats, .logs-stats, .stats { grid-template-columns: repeat(2, 1fr); }
+  .contacts-layout, .enrollments-layout, .logs-layout, .campaigns-layout, .dash-grid { grid-template-columns: 1fr; }
   .contact-detail-card, .enrollment-detail-card, .log-detail-card { position: static; }
 }
 
@@ -637,9 +723,11 @@ p.status-success {
   .inbox-sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: 40vh; }
   .inbox-sidebar-header { padding-left: 64px; }
   .inbox-chat { height: auto; min-height: 60vh; }
+  .auth { grid-template-columns: 1fr; }
+  .auth-side { display: none; }
 }
 
 @media (max-width: 560px) {
-  .enrollment-stats, .logs-stats { grid-template-columns: 1fr; }
+  .enrollment-stats, .logs-stats, .stats { grid-template-columns: 1fr; }
   .bubble, .message-bubble { max-width: 86%; }
 }
