@@ -234,6 +234,74 @@ export async function sendManualMessage(req, res) {
   }
 }
 
+// Retry a failed outbound message — re-sends the same body and updates the record.
+export async function retryMessage(req, res) {
+  try {
+    const { id } = req.params;
+
+    const message = await SMSMessage.findById(id);
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    if (message.direction !== "outbound") {
+      return res.status(400).json({ message: "Only outbound messages can be retried" });
+    }
+
+    const contact = await Contact.findOne({
+      _id: message.contactId,
+      isDeleted: false,
+    });
+
+    if (!contact || !contact.normalizedPhone) {
+      return res.status(400).json({ message: "Contact is unavailable for retry" });
+    }
+
+    try {
+      const providerResponse = await sendSMS({
+        to: contact.normalizedPhone,
+        body: message.body,
+      });
+
+      message.providerMessageSid = providerResponse.sid || "";
+      message.status = providerResponse.status || "queued";
+      message.errorCode = "";
+      message.errorMessage = "";
+      await message.save();
+
+      await createSystemLog({
+        level: "info",
+        category: "sms",
+        event: "message_retry_success",
+        message: "Message retried successfully",
+        contactId: contact._id,
+        metadata: { messageId: id, providerMessageSid: providerResponse.sid || "" },
+      });
+
+      return res.status(200).json({ message: "Message resent", item: message });
+    } catch (error) {
+      message.status = "failed";
+      message.errorCode = error.code ? String(error.code) : "";
+      message.errorMessage = error.message || "Retry failed";
+      await message.save();
+
+      await createSystemLog({
+        level: "error",
+        category: "sms",
+        event: "message_retry_failed",
+        message: error.message || "Message retry failed",
+        contactId: contact._id,
+        metadata: { messageId: id },
+      });
+
+      return res.status(500).json({ message: error.message || "Retry failed", item: message });
+    }
+  } catch (error) {
+    console.error("retryMessage error:", error);
+    return res.status(500).json({ message: "Failed to retry message" });
+  }
+}
+
 export async function getMessagesByContact(req, res) {
   try {
     const { contactId } = req.params;

@@ -12,16 +12,28 @@ function createEmptyStep(stepNumber = 1) {
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState([]);
+  const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [editingId, setEditingId] = useState(null);
 
   const [form, setForm] = useState({
     name: "",
     isActive: true,
     steps: [createEmptyStep(1)],
   });
+
+  // Enroll-contacts modal state
+  const [enrollFor, setEnrollFor] = useState(null);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerResults, setPickerResults] = useState([]);
+  const [pickerSelected, setPickerSelected] = useState([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
+  const [pickerMsg, setPickerMsg] = useState("");
 
   async function loadCampaigns() {
     try {
@@ -37,8 +49,18 @@ export default function CampaignsPage() {
     }
   }
 
+  async function loadStats() {
+    try {
+      const data = await apiFetch("/campaigns/stats");
+      setStats(data.stats || {});
+    } catch {
+      /* stats are best-effort */
+    }
+  }
+
   useEffect(() => {
     loadCampaigns();
+    loadStats();
   }, []);
 
   function updateStep(index, field, value) {
@@ -80,6 +102,33 @@ export default function CampaignsPage() {
     });
   }
 
+  function resetForm() {
+    setForm({
+      name: "",
+      isActive: true,
+      steps: [createEmptyStep(1)],
+    });
+    setEditingId(null);
+  }
+
+  function startEdit(campaign) {
+    setForm({
+      name: campaign.name || "",
+      isActive: Boolean(campaign.isActive),
+      steps: (campaign.steps || []).map((step, i) => ({
+        stepNumber: i + 1,
+        body: step.body || "",
+        delayHours: step.delayHours ?? 0,
+      })),
+    });
+    setEditingId(campaign._id);
+    setError("");
+    setSuccess("");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
 
@@ -98,23 +147,154 @@ export default function CampaignsPage() {
         })),
       };
 
-      await apiFetch("/campaigns", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      if (editingId) {
+        await apiFetch(`/campaigns/${editingId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        setSuccess("Campaign updated successfully");
+      } else {
+        await apiFetch("/campaigns", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setSuccess("Campaign created successfully");
+      }
 
-      setSuccess("Campaign created successfully");
-      setForm({
-        name: "",
-        isActive: true,
-        steps: [createEmptyStep(1)],
-      });
-
-      await loadCampaigns();
+      resetForm();
+      await Promise.all([loadCampaigns(), loadStats()]);
     } catch (err) {
-      setError(err.message || "Failed to create campaign");
+      setError(err.message || "Failed to save campaign");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function toggleActive(campaign) {
+    try {
+      setBusyId(campaign._id);
+      setError("");
+      setSuccess("");
+
+      await apiFetch(`/campaigns/${campaign._id}`, {
+        method: "PUT",
+        body: JSON.stringify({ isActive: !campaign.isActive }),
+      });
+
+      setSuccess(campaign.isActive ? "Campaign paused" : "Campaign activated");
+      await loadCampaigns();
+    } catch (err) {
+      setError(err.message || "Failed to update campaign");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function cloneCampaign(campaign) {
+    try {
+      setBusyId(campaign._id);
+      setError("");
+      setSuccess("");
+
+      await apiFetch(`/campaigns/${campaign._id}/clone`, { method: "POST" });
+
+      setSuccess(`Cloned "${campaign.name}"`);
+      await Promise.all([loadCampaigns(), loadStats()]);
+    } catch (err) {
+      setError(err.message || "Failed to clone campaign");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function deleteCampaign(campaign) {
+    if (
+      !window.confirm(
+        `Delete campaign "${campaign.name}"? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setBusyId(campaign._id);
+      setError("");
+      setSuccess("");
+
+      await apiFetch(`/campaigns/${campaign._id}`, { method: "DELETE" });
+
+      if (editingId === campaign._id) resetForm();
+      setSuccess("Campaign deleted");
+      await Promise.all([loadCampaigns(), loadStats()]);
+    } catch (err) {
+      setError(err.message || "Failed to delete campaign");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  // --- Enroll modal ---
+  async function searchContacts(query) {
+    try {
+      setPickerLoading(true);
+      const params = new URLSearchParams({
+        page: "1",
+        limit: "25",
+        search: query || "",
+        status: "all",
+      });
+      const data = await apiFetch(`/contacts?${params.toString()}`);
+      setPickerResults(data.items || []);
+    } catch (err) {
+      setPickerMsg(err.message || "Failed to search contacts");
+    } finally {
+      setPickerLoading(false);
+    }
+  }
+
+  function openEnroll(campaign) {
+    setEnrollFor(campaign);
+    setPickerSearch("");
+    setPickerSelected([]);
+    setPickerResults([]);
+    setPickerMsg("");
+    searchContacts("");
+  }
+
+  function closeEnroll() {
+    setEnrollFor(null);
+  }
+
+  function togglePick(id) {
+    setPickerSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  async function doEnroll() {
+    if (!enrollFor || !pickerSelected.length) return;
+
+    try {
+      setEnrolling(true);
+      setPickerMsg("");
+
+      const data = await apiFetch("/enrollments/bulk", {
+        method: "POST",
+        body: JSON.stringify({
+          contactIds: pickerSelected,
+          campaignId: enrollFor._id,
+        }),
+      });
+
+      setPickerMsg(
+        `Enrolled ${data.createdCount ?? 0}, skipped ${data.skippedCount ?? 0}.`
+      );
+      setPickerSelected([]);
+      await loadStats();
+    } catch (err) {
+      setPickerMsg(err.message || "Enrollment failed");
+    } finally {
+      setEnrolling(false);
     }
   }
 
@@ -135,7 +315,16 @@ export default function CampaignsPage() {
 
         <div className="campaigns-layout">
           <section className="card">
-            <h2>Create Campaign</h2>
+            <h2>{editingId ? "Edit Campaign" : "Create Campaign"}</h2>
+
+            {editingId ? (
+              <div className="editing-banner">
+                <span>Editing an existing campaign</span>
+                <button type="button" onClick={resetForm}>
+                  Cancel
+                </button>
+              </div>
+            ) : null}
 
             <form className="campaign-form" onSubmit={handleSubmit}>
               <label className="field-block">
@@ -211,8 +400,17 @@ export default function CampaignsPage() {
               </div>
 
               <div className="form-actions">
+                {editingId ? (
+                  <button type="button" className="secondary-button" onClick={resetForm}>
+                    Cancel
+                  </button>
+                ) : null}
                 <button type="submit" disabled={saving}>
-                  {saving ? "Saving..." : "Create Campaign"}
+                  {saving
+                    ? "Saving..."
+                    : editingId
+                    ? "Save Changes"
+                    : "Create Campaign"}
                 </button>
               </div>
             </form>
@@ -225,41 +423,104 @@ export default function CampaignsPage() {
               <p>Loading campaigns...</p>
             ) : campaigns.length ? (
               <div className="campaign-list">
-                {campaigns.map((campaign) => (
-                  <div key={campaign._id} className="campaign-list-item">
-                    <div className="campaign-list-head">
-                      <div>
-                        <h3>{campaign.name}</h3>
-                        <p>
-                          Status{" "}
-                          <span
-                            className={
-                              campaign.isActive ? "badge-green" : "badge-orange"
-                            }
-                          >
-                            {campaign.isActive ? "Active" : "Inactive"}
-                          </span>
-                        </p>
-                      </div>
-
-                      <div className="campaign-mini-meta">
-                        {campaign.steps?.length || 0} steps
-                      </div>
-                    </div>
-
-                    <div className="campaign-step-preview">
-                      {(campaign.steps || []).map((step) => (
-                        <div key={step.stepNumber} className="campaign-step-row">
-                          <span className="step-chip">Step {step.stepNumber}</span>
-                          <span className="step-delay-chip">
-                            {step.delayHours}h
-                          </span>
-                          <p>{step.body}</p>
+                {campaigns.map((campaign) => {
+                  const s = stats[campaign._id];
+                  return (
+                    <div key={campaign._id} className="campaign-list-item">
+                      <div className="campaign-list-head">
+                        <div>
+                          <h3>{campaign.name}</h3>
+                          <p>
+                            Status{" "}
+                            <span
+                              className={
+                                campaign.isActive ? "badge-green" : "badge-orange"
+                              }
+                            >
+                              {campaign.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </p>
                         </div>
-                      ))}
+
+                        <div className="campaign-mini-meta">
+                          {campaign.steps?.length || 0} steps
+                        </div>
+                      </div>
+
+                      <div className="campaign-step-preview">
+                        {(campaign.steps || []).map((step) => (
+                          <div key={step.stepNumber} className="campaign-step-row">
+                            <span className="step-chip">Step {step.stepNumber}</span>
+                            <span className="step-delay-chip">
+                              {step.delayHours}h
+                            </span>
+                            <p>{step.body}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {s ? (
+                        <div className="campaign-stats">
+                          <div className="campaign-stat">
+                            <span className="n">{s.enrolled}</span>
+                            <span className="l">Enrolled</span>
+                          </div>
+                          <div className="campaign-stat">
+                            <span className="n">{s.sent}</span>
+                            <span className="l">Sent</span>
+                          </div>
+                          <div className="campaign-stat">
+                            <span className="n">{s.replied}</span>
+                            <span className="l">Replied</span>
+                          </div>
+                          <div className="campaign-stat">
+                            <span className="n rate">{s.replyRate}%</span>
+                            <span className="l">Reply rate</span>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="campaign-actions">
+                        <button
+                          type="button"
+                          onClick={() => openEnroll(campaign)}
+                          disabled={busyId === campaign._id}
+                        >
+                          Enroll
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(campaign)}
+                          disabled={busyId === campaign._id}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleActive(campaign)}
+                          disabled={busyId === campaign._id}
+                        >
+                          {campaign.isActive ? "Pause" : "Activate"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cloneCampaign(campaign)}
+                          disabled={busyId === campaign._id}
+                        >
+                          Clone
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => deleteCampaign(campaign)}
+                          disabled={busyId === campaign._id}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p>No campaigns yet.</p>
@@ -267,6 +528,78 @@ export default function CampaignsPage() {
           </section>
         </div>
       </div>
+
+      {enrollFor ? (
+        <div className="modal-overlay" onClick={closeEnroll}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <h3>Enroll contacts</h3>
+                <p>Into "{enrollFor.name}"</p>
+              </div>
+              <button type="button" className="secondary-button" onClick={closeEnroll}>
+                Close
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  searchContacts(pickerSearch);
+                }}
+                style={{ display: "flex", gap: 8, marginBottom: 12 }}
+              >
+                <input
+                  type="text"
+                  placeholder="Search name, email, phone..."
+                  value={pickerSearch}
+                  onChange={(e) => setPickerSearch(e.target.value)}
+                />
+                <button type="submit">Search</button>
+              </form>
+
+              {pickerMsg ? <p className="status-success">{pickerMsg}</p> : null}
+
+              {pickerLoading ? (
+                <p className="pick-empty">Loading contacts...</p>
+              ) : pickerResults.length ? (
+                pickerResults.map((c) => (
+                  <label key={c._id} className="pick-row">
+                    <input
+                      type="checkbox"
+                      checked={pickerSelected.includes(c._id)}
+                      onChange={() => togglePick(c._id)}
+                    />
+                    <div>
+                      <div className="t-primary">{c.fullName || "-"}</div>
+                      <div className="t-sub">
+                        {c.phone || c.normalizedPhone || "-"}
+                        {c.status ? ` · ${c.status}` : ""}
+                      </div>
+                    </div>
+                  </label>
+                ))
+              ) : (
+                <p className="pick-empty">No contacts found.</p>
+              )}
+            </div>
+
+            <div className="modal-foot">
+              <span className="muted">{pickerSelected.length} selected</span>
+              <button
+                type="button"
+                onClick={doEnroll}
+                disabled={enrolling || !pickerSelected.length}
+              >
+                {enrolling
+                  ? "Enrolling..."
+                  : `Enroll ${pickerSelected.length || ""} contact${pickerSelected.length === 1 ? "" : "s"}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppLayout>
   );
 }
