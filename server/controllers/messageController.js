@@ -14,6 +14,7 @@
 // This is the controller used when you manually send a text from the dashboard.
 import Contact from "../models/Contact.js";
 import SMSMessage from "../models/SMSMessage.js";
+import AutomationSettings from "../models/AutomationSettings.js";
 import { sendSMS } from "../services/twilioService.js";
 import { upsertConversation } from "../services/conversationService.js";
 import { createSystemLog } from "../services/systemLogService.js";
@@ -54,9 +55,14 @@ export async function sendManualMessage(req, res) {
 
     const text = String(body).trim();
 
+    const automationSettings = await AutomationSettings.findOne({
+      key: "default",
+    }).lean();
+
     const eligibility = await resolveContactSmsEligibility(contact, {
       maxAgeDays: 30,
       allowStaleAllowedCacheOnLookupFailure: true,
+      allowedLineTypes: automationSettings?.allowedLineTypes,
     });
 
     if (!eligibility.allowSend) {

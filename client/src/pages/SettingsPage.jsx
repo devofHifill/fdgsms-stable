@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "../services/api";
 import AppLayout from "../components/AppLayout";
 
+// Value = normalized line type stored on the server; label = what the user sees.
+const LINE_TYPE_OPTIONS = [
+  { value: "mobile", label: "Mobile" },
+  { value: "landline", label: "Landline" },
+  { value: "fixed_voip", label: "Fixed VoIP" },
+  { value: "non_fixed_voip", label: "Non-Fixed VoIP" },
+  { value: "toll_free", label: "Toll-Free" },
+  { value: "unknown", label: "Unknown" },
+];
+
 export default function SettingsPage() {
   const [form, setForm] = useState({
     enabled: true,
@@ -10,6 +20,7 @@ export default function SettingsPage() {
       endHour: 18,
     },
     maxMessagesPerRun: 20,
+    allowedLineTypes: ["mobile"],
   });
 
   const [twilio, setTwilio] = useState({
@@ -49,6 +60,9 @@ export default function SettingsPage() {
           endHour: Number(data.sendingWindow?.endHour ?? 18),
         },
         maxMessagesPerRun: Number(data.maxMessagesPerRun ?? 20),
+        allowedLineTypes: Array.isArray(data.allowedLineTypes)
+          ? data.allowedLineTypes
+          : ["mobile"],
       });
 
       setTwilio({
@@ -87,6 +101,7 @@ export default function SettingsPage() {
           endHour: Number(form.sendingWindow.endHour),
         },
         maxMessagesPerRun: Number(form.maxMessagesPerRun),
+        allowedLineTypes: form.allowedLineTypes,
       };
 
       await apiFetch("/settings", {
@@ -101,6 +116,18 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function toggleLineType(value) {
+    setForm((prev) => {
+      const set = new Set(prev.allowedLineTypes);
+      if (set.has(value)) {
+        set.delete(value);
+      } else {
+        set.add(value);
+      }
+      return { ...prev, allowedLineTypes: Array.from(set) };
+    });
   }
 
   async function handleTwilioSubmit(e) {
@@ -323,6 +350,27 @@ export default function SettingsPage() {
                     }
                   />
                 </label>
+              </div>
+
+              <div className="field-block">
+                <span>Allowed Line Types for SMS</span>
+                <p className="muted">
+                  Only numbers whose Twilio line-type lookup matches a checked
+                  type are allowed for sending. Unchecking all blocks every
+                  number.
+                </p>
+                <div className="line-type-grid">
+                  {LINE_TYPE_OPTIONS.map((opt) => (
+                    <label key={opt.value} className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={form.allowedLineTypes.includes(opt.value)}
+                        onChange={() => toggleLineType(opt.value)}
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div className="form-actions">

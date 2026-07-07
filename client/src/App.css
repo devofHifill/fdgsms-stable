@@ -411,6 +411,8 @@ p.status-success {
 .step-card-top { display: flex; align-items: center; justify-content: space-between; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
 
+.line-type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--s3); }
+
 .campaign-list { display: flex; flex-direction: column; gap: var(--s4); }
 .campaign-list-item { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s4); }
 .campaign-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); }
