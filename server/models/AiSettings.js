@@ -70,11 +70,29 @@ const aiSettingsSchema = new mongoose.Schema(
       language: { type: String, default: "auto" },
     },
 
-    // §5 Model & behavior (minimal now; creativity/memory depth later)
-    model: {
+    // §5 Provider, model & credentials — configurable from the AI Reply System
+    // settings page (Phase 6). Provider-agnostic: OpenAI now, with Gemini and
+    // others selectable later. Kept as free-form strings so adding a provider or
+    // a new model id needs no schema change.
+    provider: {
+      // e.g. "openai" | "gemini" | "anthropic" | ...
       type: String,
-      enum: ["haiku", "sonnet"],
-      default: "haiku",
+      default: "openai",
+      trim: true,
+    },
+    model: {
+      // Free-form model id, e.g. "gpt-4o-mini".
+      type: String,
+      default: "gpt-4o-mini",
+      trim: true,
+    },
+    // API key for the selected provider, set via the settings UI. When blank,
+    // the AI service falls back to the provider's env var (e.g. OPENAI_API_KEY).
+    // SECURITY: the settings API must never return this in plaintext — mask it
+    // (e.g. "sk-…abcd") on read and only overwrite when a new value is submitted.
+    apiKey: {
+      type: String,
+      default: "",
     },
 
     // §6 Message length & format
