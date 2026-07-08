@@ -42,6 +42,34 @@ const conversationSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // 🤖 AI REPLY — human takeover (layer 3, temporary/session).
+    // When active, the AI must not reply on this conversation. Claimed by an
+    // agent (manual button, opening the thread, or sending a manual reply).
+    humanTakeover: {
+      active: {
+        type: Boolean,
+        default: false,
+      },
+      // Agent who owns the conversation. No ref yet (multi-user is a later
+      // phase); stored as an id + display name for now.
+      agentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null,
+      },
+      agentName: {
+        type: String,
+        default: "",
+      },
+      claimedAt: {
+        type: Date,
+        default: null,
+      },
+      releasedAt: {
+        type: Date,
+        default: null,
+      },
+    },
   },
   { timestamps: true }
 );

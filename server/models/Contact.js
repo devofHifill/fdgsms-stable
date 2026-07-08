@@ -56,6 +56,15 @@ const contactSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // 🤖 AI REPLY — per-contact AI mode (layer 2, persistent, tri-state).
+    // "default" defers to the global AiSettings default; forced_on/off override it.
+    aiMode: {
+      type: String,
+      enum: ["default", "forced_on", "forced_off"],
+      default: "default",
+      index: true,
+    },
     source: {
       type: String,
       enum: ["manual", "upload"],
