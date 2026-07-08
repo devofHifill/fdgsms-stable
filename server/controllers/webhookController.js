@@ -24,6 +24,7 @@ import {
   applyOptOut,
   applyOptIn,
 } from "../utils/optOut.js";
+import { maybeEnqueueAiReply } from "../services/aiReplyService.js";
 import { createSystemLog } from "../services/systemLogService.js";
 
 export async function handleInboundSMS(req, res) {
@@ -103,7 +104,7 @@ export async function handleInboundSMS(req, res) {
       },
     });
 
-    await Conversation.findOneAndUpdate(
+    const conversation = await Conversation.findOneAndUpdate(
       { contactId: contact._id },
       {
         $set: {
@@ -205,6 +206,43 @@ export async function handleInboundSMS(req, res) {
           0,
       },
     });
+
+    // 🤖 AI Reply — enqueue a job if eligible. Isolated so a failure here never
+    // affects the fast 200 or the rest of inbound processing. The LLM is never
+    // called here; the worker (Phase 4) picks up the job.
+    try {
+      const aiResult = await maybeEnqueueAiReply({
+        contact,
+        conversation,
+        inboundMessage,
+        toNumber: To,
+      });
+
+      if (aiResult.created) {
+        await createSystemLog({
+          level: "info",
+          category: "ai",
+          event: "ai_reply_enqueued",
+          message: "AI reply job enqueued for inbound message",
+          contactId: contact._id,
+          metadata: {
+            jobId: String(aiResult.jobId),
+            inboundMessageId: String(inboundMessage._id),
+          },
+        });
+      }
+    } catch (aiError) {
+      await createSystemLog({
+        level: "error",
+        category: "ai",
+        event: "ai_reply_enqueue_failed",
+        message: aiError.message || "Failed to enqueue AI reply job",
+        contactId: contact._id,
+        metadata: {
+          inboundMessageId: String(inboundMessage._id),
+        },
+      });
+    }
 
     return res.status(200).send("OK");
   } catch (error) {
