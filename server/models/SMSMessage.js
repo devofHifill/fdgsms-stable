@@ -82,7 +82,7 @@ const smsMessageSchema = new mongoose.Schema(
     },
     messageType: {
       type: String,
-      enum: ["manual", "automation", "inbound"],
+      enum: ["manual", "automation", "inbound", "ai"],
       default: "manual",
     },
 
