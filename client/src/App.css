@@ -860,6 +860,22 @@ input {
   cursor: not-allowed;
 }
 
+.enrollments-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.enrollments-header-actions select {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #2f3b43;
+  background: #202c33;
+  color: white;
+  cursor: pointer;
+}
+
 .enrollment-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(140px, 1fr));
