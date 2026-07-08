@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "../services/api";
 import AppLayout from "../components/AppLayout";
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 250, 500];
 
 function formatDate(value) {
   if (!value) return "-";
@@ -17,19 +19,43 @@ function getStepSummary(enrollment) {
 
 export default function EnrollmentsPage() {
   const [enrollments, setEnrollments] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 25,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    completed: 0,
+    stopped: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedEnrollment, setSelectedEnrollment] = useState(null);
 
-  async function loadEnrollments() {
+  async function loadEnrollments(
+    nextPage = pagination.page,
+    nextLimit = pagination.limit
+  ) {
     try {
       setLoading(true);
       setError("");
 
-      const data = await apiFetch("/enrollments");
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        limit: String(Math.min(nextLimit || 25, 500)),
+      });
+
+      const data = await apiFetch(`/enrollments?${params.toString()}`);
       const items = data.items || [];
 
       setEnrollments(items);
+      setPagination(data.pagination || {});
+      setStats(data.stats || {});
       setSelectedEnrollment((prev) => {
         if (!items.length) return null;
         if (!prev) return items[0];
@@ -43,17 +69,27 @@ export default function EnrollmentsPage() {
   }
 
   useEffect(() => {
-    loadEnrollments();
+    loadEnrollments(1, pagination.limit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const stats = useMemo(() => {
-    const total = enrollments.length;
-    const active = enrollments.filter((x) => x.status === "active").length;
-    const completed = enrollments.filter((x) => x.status === "completed").length;
-    const stopped = enrollments.filter((x) => x.status === "stopped").length;
+  function handleLimitChange(e) {
+    const nextLimit = Math.min(Number(e.target.value) || 25, 500);
+    setPagination((prev) => ({ ...prev, page: 1, limit: nextLimit }));
+    loadEnrollments(1, nextLimit);
+  }
 
-    return { total, active, completed, stopped };
-  }, [enrollments]);
+  function handlePrevPage() {
+    if (pagination.hasPrevPage) {
+      loadEnrollments(pagination.page - 1, pagination.limit);
+    }
+  }
+
+  function handleNextPage() {
+    if (pagination.hasNextPage) {
+      loadEnrollments(pagination.page + 1, pagination.limit);
+    }
+  }
 
   return (
     <AppLayout>
@@ -64,9 +100,26 @@ export default function EnrollmentsPage() {
             <p>Track automation status, current step, and campaign progress.</p>
           </div>
 
-          <button onClick={loadEnrollments} disabled={loading}>
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="enrollments-header-actions">
+            <select
+              value={pagination.limit}
+              onChange={handleLimitChange}
+              disabled={loading}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  Show {size}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={() => loadEnrollments(pagination.page, pagination.limit)}
+              disabled={loading}
+            >
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
         <div className="enrollment-stats">
@@ -115,6 +168,7 @@ export default function EnrollmentsPage() {
             {loading ? (
               <p>Loading enrollments...</p>
             ) : enrollments.length ? (
+              <>
               <table className="enrollments-table">
                 <thead>
                   <tr>
@@ -156,6 +210,28 @@ export default function EnrollmentsPage() {
                   ))}
                 </tbody>
               </table>
+
+              <div className="pagination-bar">
+                <button
+                  onClick={handlePrevPage}
+                  disabled={!pagination.hasPrevPage}
+                >
+                  Previous
+                </button>
+
+                <span>
+                  Page {pagination.page} of {pagination.totalPages} | Total{" "}
+                  {pagination.total}
+                </span>
+
+                <button
+                  onClick={handleNextPage}
+                  disabled={!pagination.hasNextPage}
+                >
+                  Next
+                </button>
+              </div>
+              </>
             ) : (
               <p>No enrollments found.</p>
             )}
