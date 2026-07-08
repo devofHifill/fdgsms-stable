@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { apiFetch } from "../services/api";
 
 /* Inline icons (no external icon-lib version risk) */
 const PATHS = {
@@ -70,6 +71,8 @@ export default function AppLayout({ children }) {
     }
   });
 
+  const [unread, setUnread] = useState(0);
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
@@ -78,6 +81,25 @@ export default function AppLayout({ children }) {
       /* ignore */
     }
   }, [theme]);
+
+  // Poll the unread-conversation count for the Inbox nav badge.
+  useEffect(() => {
+    let alive = true;
+    async function loadUnread() {
+      try {
+        const data = await apiFetch("/conversations/unread-count");
+        if (alive) setUnread(Number(data?.total) || 0);
+      } catch {
+        /* ignore — badge just stays as-is */
+      }
+    }
+    loadUnread();
+    const id = setInterval(loadUnread, 20000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
 
   const initials = (user?.email || "AD").slice(0, 2).toUpperCase();
 
@@ -108,6 +130,9 @@ export default function AppLayout({ children }) {
                     <Icon name={item.icon} />
                   </span>
                   <span className="nav-label">{item.label}</span>
+                  {item.to === "/inbox" && unread > 0 ? (
+                    <span className="nav-badge">{unread}</span>
+                  ) : null}
                 </NavLink>
               ))}
             </div>

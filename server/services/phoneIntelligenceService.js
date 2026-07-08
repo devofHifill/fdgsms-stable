@@ -1,7 +1,27 @@
 import { lookupPhoneNumber } from "./twilioService.js";
 
-const ALLOWED_LINE_TYPES = new Set(["mobile"]);
+// Line types (normalized form) an operator can choose to allow. These match the
+// values Twilio's line_type_intelligence returns after normalizeLineType().
+export const SELECTABLE_LINE_TYPES = [
+  "mobile",
+  "landline",
+  "fixed_voip",
+  "non_fixed_voip",
+  "toll_free",
+  "unknown",
+];
+export const DEFAULT_ALLOWED_LINE_TYPES = ["mobile"];
 const DEFAULT_CACHE_DAYS = 30;
+
+// Accepts an array of line types (or an already-built Set) and returns a Set of
+// normalized types. A non-array falls back to the default (mobile only).
+function toAllowedSet(allowedLineTypes) {
+  if (allowedLineTypes instanceof Set) return allowedLineTypes;
+  if (!Array.isArray(allowedLineTypes)) {
+    return new Set(DEFAULT_ALLOWED_LINE_TYPES);
+  }
+  return new Set(allowedLineTypes.map(normalizeLineType));
+}
 
 export function normalizeLineType(value) {
   return String(value || "")
@@ -11,8 +31,11 @@ export function normalizeLineType(value) {
     .toLowerCase();
 }
 
-export function isAllowedSmsLineType(lineType) {
-  return ALLOWED_LINE_TYPES.has(normalizeLineType(lineType));
+export function isAllowedSmsLineType(
+  lineType,
+  allowedLineTypes = DEFAULT_ALLOWED_LINE_TYPES
+) {
+  return toAllowedSet(allowedLineTypes).has(normalizeLineType(lineType));
 }
 
 function getAgeInDays(dateValue) {
@@ -23,12 +46,15 @@ function getAgeInDays(dateValue) {
   return (Date.now() - checkedAt.getTime()) / (1000 * 60 * 60 * 24);
 }
 
-export function getCachedLineTypeDecision(contact, { maxAgeDays = DEFAULT_CACHE_DAYS } = {}) {
+export function getCachedLineTypeDecision(
+  contact,
+  { maxAgeDays = DEFAULT_CACHE_DAYS, allowedLineTypes = DEFAULT_ALLOWED_LINE_TYPES } = {}
+) {
   const normalized = normalizeLineType(contact?.lineTypeNormalized || contact?.lineTypeRaw);
   const hasCachedType = Boolean(normalized);
   const ageDays = getAgeInDays(contact?.lineTypeCheckedAt);
   const isFresh = hasCachedType && ageDays <= maxAgeDays;
-  const allowed = isAllowedSmsLineType(normalized);
+  const allowed = isAllowedSmsLineType(normalized, allowedLineTypes);
 
   return {
     hasCachedType,
@@ -41,7 +67,10 @@ export function getCachedLineTypeDecision(contact, { maxAgeDays = DEFAULT_CACHE_
   };
 }
 
-export async function refreshContactPhoneIntelligence(contact) {
+export async function refreshContactPhoneIntelligence(
+  contact,
+  { allowedLineTypes = DEFAULT_ALLOWED_LINE_TYPES } = {}
+) {
   const now = new Date();
 
   try {
@@ -49,7 +78,7 @@ export async function refreshContactPhoneIntelligence(contact) {
 
     const rawLineType = lookup?.lineType || "";
     const normalizedLineType = normalizeLineType(rawLineType);
-    const allowed = isAllowedSmsLineType(normalizedLineType);
+    const allowed = isAllowedSmsLineType(normalizedLineType, allowedLineTypes);
 
     contact.lineTypeRaw = rawLineType;
     contact.lineTypeNormalized = normalizedLineType;
@@ -98,9 +127,14 @@ export async function resolveContactSmsEligibility(
   {
     maxAgeDays = DEFAULT_CACHE_DAYS,
     allowStaleAllowedCacheOnLookupFailure = true,
+    allowedLineTypes = DEFAULT_ALLOWED_LINE_TYPES,
   } = {}
 ) {
-  const cached = getCachedLineTypeDecision(contact, { maxAgeDays });
+  const allowedSet = toAllowedSet(allowedLineTypes);
+  const cached = getCachedLineTypeDecision(contact, {
+    maxAgeDays,
+    allowedLineTypes: allowedSet,
+  });
 
   if (cached.isFresh) {
     return {
@@ -116,7 +150,9 @@ export async function resolveContactSmsEligibility(
     };
   }
 
-  const refreshed = await refreshContactPhoneIntelligence(contact);
+  const refreshed = await refreshContactPhoneIntelligence(contact, {
+    allowedLineTypes: allowedSet,
+  });
 
   if (refreshed.ok) {
     return {

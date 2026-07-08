@@ -411,6 +411,8 @@ p.status-success {
 .step-card-top { display: flex; align-items: center; justify-content: space-between; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
 
+.line-type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--s3); }
+
 .campaign-list { display: flex; flex-direction: column; gap: var(--s4); }
 .campaign-list-item { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s4); }
 .campaign-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); }
@@ -425,6 +427,51 @@ p.status-success {
   border-radius: 6px; background: var(--surface-3); border: 1px solid var(--border);
   font-size: 12px; font-weight: 600;
 }
+.campaign-actions {
+  display: flex; gap: 8px; margin-top: var(--s4); flex-wrap: wrap;
+  border-top: 1px solid var(--border); padding-top: var(--s3);
+}
+.campaign-actions button { padding: 6px 12px; font-size: 12.5px; }
+.campaign-actions .danger { color: #f08a8a; }
+.campaign-actions .danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+.editing-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--warn-tint); color: var(--warn); padding: 8px 14px;
+  border-radius: var(--r-sm); margin-bottom: var(--s4); font-size: 13px; font-weight: 600;
+}
+.editing-banner button { padding: 4px 10px; font-size: 12px; }
+
+/* Phase 4: campaign stats */
+.campaign-stats {
+  display: flex; gap: 20px; flex-wrap: wrap; margin-top: var(--s3);
+  padding-top: var(--s3); border-top: 1px solid var(--border);
+}
+.campaign-stat { display: flex; flex-direction: column; }
+.campaign-stat .n { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
+.campaign-stat .n.rate { color: var(--primary); }
+.campaign-stat .l { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+/* Phase 4: modal (enroll contacts) */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.55);
+  display: grid; place-items: center; padding: var(--s5);
+}
+.modal {
+  width: 100%; max-width: 560px; max-height: 85vh; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column;
+}
+.modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); padding: var(--s5); border-bottom: 1px solid var(--border); }
+.modal-head h3 { font-size: 17px; font-weight: 700; }
+.modal-head p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+.modal-body { padding: var(--s5); overflow-y: auto; }
+.modal-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); padding: var(--s4) var(--s5); border-top: 1px solid var(--border); }
+.pick-row { display: flex; align-items: center; gap: var(--s3); padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.pick-row:last-child { border-bottom: none; }
+.pick-row .t-primary { font-weight: 600; }
+.pick-row .t-sub { color: var(--muted); font-size: 12px; }
+.pick-empty { color: var(--muted); text-align: center; padding: var(--s6) 0; }
 
 .step-item { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s3) var(--s4); }
 .step-item + .step-item { margin-top: var(--s2); }
@@ -478,7 +525,7 @@ p.status-success {
 /* ---------------------------------------------------------
    15. Inbox (3-pane)
    --------------------------------------------------------- */
-.inbox { display: grid; grid-template-columns: 360px 1fr; height: 100vh; }
+.inbox { display: grid; grid-template-columns: 340px minmax(0, 1fr) 320px; height: 100vh; }
 .inbox-sidebar { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--surface); overflow-y: auto; }
 .inbox-sidebar-header { padding: var(--s5); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
 .inbox-sidebar-header h1 { font-size: 18px; font-weight: 800; }
@@ -513,6 +560,90 @@ p.status-success {
 .jump-latest:hover { border-color: var(--primary); }
 .composer-meta { grid-column: 1 / -1; font-size: 11px; color: var(--muted); text-align: right; }
 .composer-meta .warn { color: var(--warn); }
+
+/* Phase 3: nav unread badge */
+.nav-badge {
+  margin-left: auto; background: var(--primary); color: #fff;
+  font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: var(--r-pill);
+  min-width: 20px; text-align: center;
+}
+
+/* Phase 3: unread conversation indicators */
+.conv-unread {
+  background: var(--primary); color: #fff; font-size: 11px; font-weight: 700;
+  height: 18px; min-width: 18px; padding: 0 6px; border-radius: var(--r-pill);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.conversation.is-unread .conv-name { font-weight: 800; }
+.conversation.is-unread .conv-preview { color: var(--text); font-weight: 500; }
+
+/* Phase 3: opt-out banner */
+.optout-banner {
+  margin: var(--s3) var(--s5) 0; background: var(--danger-tint); color: var(--danger);
+  padding: 10px 14px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600;
+}
+
+/* Phase 3: contact context panel */
+.inbox-context {
+  border-left: 1px solid var(--border); background: var(--surface);
+  overflow-y: auto; padding: var(--s5); display: flex; flex-direction: column; gap: var(--s5);
+}
+.ctx-head { display: flex; align-items: center; gap: var(--s3); }
+.ctx-title { font-weight: 700; font-size: 15px; }
+.ctx-sub { font-size: 12px; color: var(--muted); }
+.ctx-section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); margin-bottom: var(--s2); }
+.ctx-field { display: flex; flex-direction: column; gap: 2px; padding: var(--s2) 0; border-bottom: 1px solid var(--border); }
+.ctx-field:last-child { border-bottom: none; }
+.ctx-field .k { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+.ctx-field .v { font-size: 13.5px; word-break: break-word; }
+.ctx-empty { color: var(--muted); text-align: center; padding: var(--s10) var(--s3); }
+
+/* Phase 5: enrollment controls */
+.ctx-actions { display: flex; gap: 8px; margin-top: var(--s3); flex-wrap: wrap; }
+.ctx-actions button {
+  padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface-2); color: var(--text);
+}
+.ctx-actions button:hover { background: var(--hover); border-color: var(--border-2); }
+.ctx-actions .danger { color: #f08a8a; }
+.ctx-actions .danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+.ctx-actions button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Phase 5: delivery status + retry on bubbles */
+.msg-status { text-transform: capitalize; font-weight: 600; }
+.msg-status.bad { color: #ffd4d4; }
+.bubble-retry {
+  background: rgba(0, 0, 0, 0.3); border: none; color: #fff;
+  font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 6px; cursor: pointer;
+}
+.bubble-retry:hover { background: var(--danger); }
+
+/* Phase 5: templates popover */
+.composer-tools { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.tmpl-btn {
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
+  font: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px;
+  border-radius: var(--r-pill); cursor: pointer;
+}
+.tmpl-btn:hover { background: var(--hover); color: var(--text); }
+.tmpl-popover {
+  position: absolute; bottom: 96px; left: 20px; width: 320px; max-height: 320px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+  box-shadow: var(--shadow-lg); z-index: 4; padding: var(--s3);
+}
+.tmpl-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--s2); }
+.tmpl-head .ct { font-weight: 700; font-size: 13px; }
+.tmpl-save { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font: inherit; font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: var(--r-sm); cursor: pointer; }
+.tmpl-save:hover { background: var(--hover); }
+.tmpl-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border-radius: var(--r-sm); }
+.tmpl-item:hover { background: var(--hover); }
+.tmpl-item .tm-main { min-width: 0; cursor: pointer; flex: 1; }
+.tmpl-item .tm-name { font-weight: 600; font-size: 13px; }
+.tmpl-item .tm-body { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tmpl-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 6px; }
+.tmpl-del:hover { color: var(--danger); }
+.tmpl-empty { color: var(--muted); font-size: 12.5px; padding: var(--s4); text-align: center; }
 
 .conversation {
   width: 100%; text-align: left; background: transparent;
@@ -716,6 +847,11 @@ a.list-row + a.list-row { margin-top: var(--s2); }
 /* ---------------------------------------------------------
    17. Responsive
    --------------------------------------------------------- */
+@media (max-width: 1280px) {
+  .inbox { grid-template-columns: 340px minmax(0, 1fr); }
+  .inbox-context { display: none; }
+}
+
 @media (max-width: 1100px) {
   .enrollment-stats, .logs-stats, .stats { grid-template-columns: repeat(2, 1fr); }
   .contacts-layout, .enrollments-layout, .logs-layout, .campaigns-layout, .dash-grid { grid-template-columns: 1fr; }
@@ -729,7 +865,7 @@ a.list-row + a.list-row { margin-top: var(--s2); }
   .brand-text { display: none; }
   .nav-group-title { display: none; }
   .sidebar-nav a { justify-content: center; padding: 11px 0; }
-  .nav-label { display: none; }
+  .nav-label, .nav-badge { display: none; }
   .sidebar-nav a.active::before { left: 0; }
   .sidebar-foot { padding: var(--s2); }
   .user-card { justify-content: center; padding: 6px 0; }

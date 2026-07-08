@@ -59,8 +59,11 @@ function smsInfo(text) {
   return { len, seg };
 }
 
+const FAILED_STATUSES = ["failed", "undelivered"];
+
 const FILTERS = [
   { key: "all", label: "All" },
+  { key: "unread", label: "Unread" },
   { key: "needs", label: "Needs reply" },
   { key: "replied", label: "Replied" },
 ];
@@ -75,6 +78,10 @@ export default function InboxPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [showJump, setShowJump] = useState(false);
+
+  const [templates, setTemplates] = useState([]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [enrollBusy, setEnrollBusy] = useState(false);
 
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -101,6 +108,29 @@ export default function InboxPage() {
       setEnrollment(null);
     }
   }
+
+  const markRead = useCallback(async (contactId) => {
+    if (!contactId) return;
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.contactId === contactId ? { ...c, unreadCount: 0 } : c
+      )
+    );
+    try {
+      await apiFetch(`/conversations/${contactId}/read`, { method: "POST" });
+    } catch {
+      /* ignore — badge will re-sync on next poll */
+    }
+  }, []);
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      const data = await apiFetch("/templates");
+      setTemplates(data.items || []);
+    } catch {
+      /* templates are optional */
+    }
+  }, []);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -189,6 +219,11 @@ export default function InboxPage() {
 
       if (!text.trim() || !active || sending) return;
 
+      if (active?.contact?.status === "opted_out") {
+        setError("This contact has opted out. Sending is disabled.");
+        return;
+      }
+
       try {
         setSending(true);
         setError("");
@@ -265,6 +300,79 @@ export default function InboxPage() {
     }
   }, [active, loadConversations]);
 
+  const handleRetry = useCallback(async (messageId) => {
+    try {
+      setError("");
+      const data = await apiFetch(`/messages/${messageId}/retry`, {
+        method: "POST",
+      });
+      if (data?.item) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === messageId ? data.item : m))
+        );
+      }
+    } catch (err) {
+      setError(err.message || "Retry failed");
+    }
+  }, []);
+
+  const changeEnrollmentStatus = useCallback(
+    async (status) => {
+      if (!enrollment?._id) return;
+      try {
+        setEnrollBusy(true);
+        setError("");
+        const data = await apiFetch(`/enrollments/${enrollment._id}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        });
+        setEnrollment(data.item || null);
+      } catch (err) {
+        setError(err.message || "Failed to update automation");
+      } finally {
+        setEnrollBusy(false);
+      }
+    },
+    [enrollment]
+  );
+
+  const applyTemplate = useCallback(
+    (body) => {
+      const first = (active?.contact?.fullName || "").split(/\s+/)[0] || "there";
+      setText(String(body).replace(/\{\{\s*firstName\s*\}\}/g, first));
+      setShowTemplates(false);
+    },
+    [active]
+  );
+
+  const saveTemplate = useCallback(async () => {
+    const body = text.trim();
+    if (!body) return;
+    const name = window.prompt("Template name?");
+    if (!name || !name.trim()) return;
+    try {
+      await apiFetch("/templates", {
+        method: "POST",
+        body: JSON.stringify({ name: name.trim(), body }),
+      });
+      await loadTemplates();
+    } catch (err) {
+      setError(err.message || "Failed to save template");
+    }
+  }, [text, loadTemplates]);
+
+  const removeTemplate = useCallback(
+    async (id) => {
+      try {
+        await apiFetch(`/templates/${id}`, { method: "DELETE" });
+        await loadTemplates();
+      } catch {
+        /* ignore */
+      }
+    },
+    [loadTemplates]
+  );
+
   const handleComposerKeyDown = useCallback(
     (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -281,7 +389,8 @@ export default function InboxPage() {
 
   useEffect(() => {
     loadConversations();
-  }, [loadConversations]);
+    loadTemplates();
+  }, [loadConversations, loadTemplates]);
 
   useEffect(() => {
     if (!active?.contactId) {
@@ -295,7 +404,8 @@ export default function InboxPage() {
       forceScroll: true,
     });
     loadEnrollment(active.contactId);
-  }, [active?.contactId, loadMessages]);
+    markRead(active.contactId);
+  }, [active?.contactId, loadMessages, markRead]);
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -332,6 +442,7 @@ export default function InboxPage() {
   const visibleConversations = useMemo(() => {
     const q = search.trim().toLowerCase();
     return conversations.filter((c) => {
+      if (filter === "unread" && !(c.unreadCount > 0)) return false;
       if (filter === "needs" && c.lastDirection !== "inbound") return false;
       if (filter === "replied" && c.lastDirection !== "outbound") return false;
 
@@ -365,6 +476,7 @@ export default function InboxPage() {
   }, [messages]);
 
   const composer = smsInfo(text);
+  const optedOut = active?.contact?.status === "opted_out";
 
   return (
     <AppLayout>
@@ -401,12 +513,12 @@ export default function InboxPage() {
             <div className="empty-sidebar">Loading conversations...</div>
           ) : visibleConversations.length ? (
             visibleConversations.map((c) => {
-              const needsReply = c.lastDirection === "inbound";
+              const unread = c.unreadCount || 0;
               return (
                 <button
                   key={c._id}
                   type="button"
-                  className={`conversation ${active?._id === c._id ? "active" : ""}`}
+                  className={`conversation ${active?._id === c._id ? "active" : ""} ${unread > 0 ? "is-unread" : ""}`}
                   onClick={() => handleSelect(c)}
                 >
                   <span className="conv-avatar">
@@ -418,7 +530,9 @@ export default function InboxPage() {
                         {c.contact?.fullName || "Unknown"}
                       </span>
                       <span className="conv-time">
-                        {needsReply ? <span className="conv-dot" title="Awaiting your reply" /> : null}
+                        {unread > 0 ? (
+                          <span className="conv-unread">{unread}</span>
+                        ) : null}
                         {c.lastMessageAt
                           ? new Date(c.lastMessageAt).toLocaleTimeString([], {
                               hour: "2-digit",
@@ -471,6 +585,11 @@ export default function InboxPage() {
               </div>
 
               {error ? <div className="inbox-error-banner">{error}</div> : null}
+              {optedOut ? (
+                <div className="optout-banner">
+                  This contact has opted out — sending is disabled.
+                </div>
+              ) : null}
 
               <div
                 className="chat-messages"
@@ -513,6 +632,23 @@ export default function InboxPage() {
                               minute: "2-digit",
                             })}
                           </span>
+                          {item.message.direction === "outbound" && item.message.status ? (
+                            <span
+                              className={`msg-status ${FAILED_STATUSES.includes(item.message.status) ? "bad" : ""}`}
+                            >
+                              {item.message.status}
+                            </span>
+                          ) : null}
+                          {item.message.direction === "outbound" &&
+                          FAILED_STATUSES.includes(item.message.status) ? (
+                            <button
+                              type="button"
+                              className="bubble-retry"
+                              onClick={() => handleRetry(item.message._id)}
+                            >
+                              Retry
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     )
@@ -535,26 +671,71 @@ export default function InboxPage() {
                 </button>
               ) : null}
 
+              {showTemplates ? (
+                <div className="tmpl-popover">
+                  <div className="tmpl-head">
+                    <span className="ct">Templates</span>
+                    <button type="button" className="tmpl-save" onClick={saveTemplate}>
+                      + Save current
+                    </button>
+                  </div>
+                  {templates.length ? (
+                    templates.map((t) => (
+                      <div key={t._id} className="tmpl-item">
+                        <div
+                          className="tm-main"
+                          onClick={() => applyTemplate(t.body)}
+                        >
+                          <div className="tm-name">{t.name}</div>
+                          <div className="tm-body">{t.body}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="tmpl-del"
+                          title="Delete template"
+                          onClick={() => removeTemplate(t._id)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="tmpl-empty">
+                      No templates yet. Type a message and "Save current".
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
               <form className="chat-input" onSubmit={handleSend}>
                 <textarea
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={handleComposerKeyDown}
-                  placeholder="Type a message..."
+                  placeholder={optedOut ? "Sending disabled — contact opted out" : "Type a message..."}
                   rows={2}
-                  disabled={!active || sending}
+                  disabled={!active || sending || optedOut}
                 />
                 <button
                   type="submit"
-                  disabled={!active || sending || !text.trim()}
+                  disabled={!active || sending || optedOut || !text.trim()}
                 >
                   {sending ? "Sending..." : "Send"}
                 </button>
-                <div className="composer-meta">
-                  {composer.len} chars ·{" "}
-                  <span className={composer.seg > 1 ? "warn" : ""}>
-                    {composer.seg} segment{composer.seg === 1 ? "" : "s"}
-                  </span>
+                <div className="composer-tools">
+                  <button
+                    type="button"
+                    className="tmpl-btn"
+                    onClick={() => setShowTemplates((v) => !v)}
+                  >
+                    Templates
+                  </button>
+                  <div className="composer-meta">
+                    {composer.len} chars ·{" "}
+                    <span className={composer.seg > 1 ? "warn" : ""}>
+                      {composer.seg} segment{composer.seg === 1 ? "" : "s"}
+                    </span>
+                  </div>
                 </div>
               </form>
             </>
@@ -564,6 +745,100 @@ export default function InboxPage() {
             </div>
           )}
         </main>
+
+        <aside className="inbox-context">
+          {active ? (
+            <>
+              <div className="ctx-head">
+                <span className="conv-avatar">
+                  {getInitials(active.contact?.fullName)}
+                </span>
+                <div>
+                  <div className="ctx-title">
+                    {active.contact?.fullName || "Unknown"}
+                  </div>
+                  {optedOut ? <div className="ctx-sub">Opted out</div> : null}
+                </div>
+              </div>
+
+              <div>
+                <div className="ctx-section-label">Contact</div>
+                <div className="ctx-field">
+                  <span className="k">Phone</span>
+                  <span className="v">
+                    {active.contact?.normalizedPhone || active.contact?.phone || "-"}
+                  </span>
+                </div>
+                <div className="ctx-field">
+                  <span className="k">Email</span>
+                  <span className="v">{active.contact?.email || "-"}</span>
+                </div>
+                <div className="ctx-field">
+                  <span className="k">Status</span>
+                  <span className="v">{active.contact?.status || "-"}</span>
+                </div>
+                <div className="ctx-field">
+                  <span className="k">Line type</span>
+                  <span className="v">{active.contact?.lineType || "unknown"}</span>
+                </div>
+              </div>
+
+              <div>
+                <div className="ctx-section-label">Automation</div>
+                {enrollment ? (
+                  <>
+                    <div className="ctx-field">
+                      <span className="k">Campaign</span>
+                      <span className="v">{enrollment.campaignId?.name || "-"}</span>
+                    </div>
+                    <div className="ctx-field">
+                      <span className="k">Status</span>
+                      <span className="v">{enrollment.status || "-"}</span>
+                    </div>
+                    <div className="ctx-field">
+                      <span className="k">Current step</span>
+                      <span className="v">{enrollment.currentStep ?? "-"}</span>
+                    </div>
+
+                    <div className="ctx-actions">
+                      {enrollment.status === "active" ? (
+                        <button
+                          type="button"
+                          onClick={() => changeEnrollmentStatus("paused")}
+                          disabled={enrollBusy}
+                        >
+                          Pause
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => changeEnrollmentStatus("active")}
+                          disabled={enrollBusy}
+                        >
+                          Resume
+                        </button>
+                      )}
+                      {enrollment.status !== "stopped" ? (
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => changeEnrollmentStatus("stopped")}
+                          disabled={enrollBusy}
+                        >
+                          Stop
+                        </button>
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <div className="ctx-empty">No active sequence</div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="ctx-empty">Select a conversation to see contact details.</div>
+          )}
+        </aside>
       </div>
     </AppLayout>
   );

@@ -37,6 +37,11 @@ const conversationSchema = new mongoose.Schema(
       enum: ["active", "replied", "closed"],
       default: "active",
     },
+
+    unreadCount: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

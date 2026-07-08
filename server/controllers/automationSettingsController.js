@@ -1,4 +1,9 @@
 import AutomationSettings from "../models/AutomationSettings.js";
+import {
+  SELECTABLE_LINE_TYPES,
+  DEFAULT_ALLOWED_LINE_TYPES,
+  normalizeLineType,
+} from "../services/phoneIntelligenceService.js";
 
 export async function getAutomationSettings(req, res) {
   try {
@@ -13,6 +18,7 @@ export async function getAutomationSettings(req, res) {
           endHour: 18,
         },
         maxMessagesPerRun: 20,
+        allowedLineTypes: DEFAULT_ALLOWED_LINE_TYPES,
       });
     }
 
@@ -27,7 +33,8 @@ export async function getAutomationSettings(req, res) {
 
 export async function updateAutomationSettings(req, res) {
   try {
-    const { enabled, sendingWindow, maxMessagesPerRun } = req.body;
+    const { enabled, sendingWindow, maxMessagesPerRun, allowedLineTypes } =
+      req.body;
 
     let item = await AutomationSettings.findOne({ key: "default" });
 
@@ -72,6 +79,25 @@ export async function updateAutomationSettings(req, res) {
       }
 
       item.maxMessagesPerRun = parsed;
+    }
+
+    if (allowedLineTypes !== undefined) {
+      if (!Array.isArray(allowedLineTypes)) {
+        return res.status(400).json({
+          message: "allowedLineTypes must be an array",
+        });
+      }
+
+      // Normalize, keep only recognized types, and de-duplicate.
+      const sanitized = [
+        ...new Set(
+          allowedLineTypes
+            .map((type) => normalizeLineType(type))
+            .filter((type) => SELECTABLE_LINE_TYPES.includes(type))
+        ),
+      ];
+
+      item.allowedLineTypes = sanitized;
     }
 
     await item.save();
