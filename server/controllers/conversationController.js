@@ -43,6 +43,10 @@ export async function getConversations(req, res) {
           ? {
               fullName: contact.fullName,
               phone: contact.phone,
+              email: contact.email,
+              status: contact.status,
+              normalizedPhone: contact.normalizedPhone,
+              lineType: contact.lineTypeNormalized || contact.lineTypeRaw || "",
             }
           : null,
       };
@@ -52,6 +56,38 @@ export async function getConversations(req, res) {
   } catch (error) {
     console.error("getConversations error:", error);
     res.status(500).json({ message: "Failed to fetch conversations" });
+  }
+}
+
+// Total number of conversations with unread inbound messages (for the nav badge).
+export async function getUnreadCount(req, res) {
+  try {
+    const total = await Conversation.countDocuments({ unreadCount: { $gt: 0 } });
+    return res.json({ total });
+  } catch (error) {
+    console.error("getUnreadCount error:", error);
+    res.status(500).json({ message: "Failed to fetch unread count" });
+  }
+}
+
+// Mark a conversation as read (clears its unread counter) when the user opens it.
+export async function markConversationRead(req, res) {
+  try {
+    const { contactId } = req.params;
+
+    if (!mongoose.isValidObjectId(contactId)) {
+      return res.status(400).json({ message: "Invalid contact id" });
+    }
+
+    await Conversation.findOneAndUpdate(
+      { contactId },
+      { $set: { unreadCount: 0 } }
+    );
+
+    return res.json({ message: "Marked as read" });
+  } catch (error) {
+    console.error("markConversationRead error:", error);
+    res.status(500).json({ message: "Failed to mark as read" });
   }
 }
 

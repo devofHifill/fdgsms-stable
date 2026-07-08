@@ -110,6 +110,7 @@ export async function handleInboundSMS(req, res) {
           lastMessageAt: inboundMessage.createdAt,
           status: "replied",
         },
+        $inc: { unreadCount: 1 },
       },
       {
         new: true,
@@ -170,6 +171,49 @@ export async function handleInboundSMS(req, res) {
       },
     });
 
+    return res.status(200).send("OK");
+  }
+}
+
+// Twilio delivery-status callback — updates the stored message's status by SID.
+// Configure this URL as the statusCallback on your Twilio sender/messaging service.
+const STATUS_VALUES = new Set([
+  "queued",
+  "accepted",
+  "sending",
+  "sent",
+  "delivered",
+  "undelivered",
+  "failed",
+  "received",
+]);
+
+export async function handleStatusCallback(req, res) {
+  try {
+    const { MessageSid, MessageStatus, ErrorCode } = req.body;
+
+    if (!MessageSid) {
+      return res.status(200).send("OK");
+    }
+
+    const update = {};
+    if (MessageStatus && STATUS_VALUES.has(MessageStatus)) {
+      update.status = MessageStatus;
+    }
+    if (ErrorCode) {
+      update.errorCode = String(ErrorCode);
+    }
+
+    if (Object.keys(update).length) {
+      await SMSMessage.findOneAndUpdate(
+        { providerMessageSid: MessageSid },
+        { $set: update }
+      );
+    }
+
+    return res.status(200).send("OK");
+  } catch (error) {
+    console.error("Status callback error:", error);
     return res.status(200).send("OK");
   }
 }

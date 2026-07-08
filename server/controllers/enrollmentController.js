@@ -12,6 +12,7 @@
 
 // This connects contacts to automation campaigns.
 
+import mongoose from "mongoose";
 import Campaign from "../models/Campaign.js";
 import Contact from "../models/Contact.js";
 import Enrollment from "../models/Enrollment.js";
@@ -292,5 +293,63 @@ export async function getEnrollmentByContact(req, res) {
     return res.status(500).json({
       message: "Failed to fetch enrollment",
     });
+  }
+}
+
+// Manually pause / resume / stop an enrollment from the UI.
+// - resume (active): re-arms nextSendAt so the worker picks it up
+// - pause: clears nextSendAt (worker skips it) but keeps progress
+// - stop: terminal manual stop
+export async function updateEnrollmentStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid enrollment id" });
+    }
+
+    const allowed = ["active", "paused", "stopped"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const update = { status };
+    if (status === "active") {
+      update.nextSendAt = new Date();
+      update.stopReason = "";
+    } else if (status === "paused") {
+      update.nextSendAt = null;
+      update.stopReason = "manual_pause";
+    } else if (status === "stopped") {
+      update.nextSendAt = null;
+      update.stopReason = "manual";
+    }
+
+    const enrollment = await Enrollment.findByIdAndUpdate(
+      id,
+      { $set: update },
+      { new: true }
+    )
+      .populate("contactId", "fullName phone normalizedPhone email")
+      .populate("campaignId", "name steps isActive");
+
+    if (!enrollment) {
+      return res.status(404).json({ message: "Enrollment not found" });
+    }
+
+    await createSystemLog({
+      level: "info",
+      category: "automation",
+      event: `enrollment_${status}`,
+      message: `Enrollment manually set to ${status}`,
+      enrollmentId: enrollment._id,
+      contactId: enrollment.contactId?._id,
+      campaignId: enrollment.campaignId?._id,
+    });
+
+    return res.status(200).json({ message: `Enrollment ${status}`, item: enrollment });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to update enrollment" });
   }
 }

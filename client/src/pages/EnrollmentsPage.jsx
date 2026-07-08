@@ -70,21 +70,41 @@ export default function EnrollmentsPage() {
         </div>
 
         <div className="enrollment-stats">
-          <div className="stat-card">
-            <span>Total</span>
-            <strong>{stats.total}</strong>
+          <div className="stat">
+            <div className="stat-ico is-neutral">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            </div>
+            <div className="stat-body">
+              <div className="stat-label">Total</div>
+              <div className="stat-value">{stats.total}</div>
+            </div>
           </div>
-          <div className="stat-card">
-            <span>Active</span>
-            <strong>{stats.active}</strong>
+          <div className="stat">
+            <div className="stat-ico is-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div className="stat-body">
+              <div className="stat-label">Active</div>
+              <div className="stat-value">{stats.active}</div>
+            </div>
           </div>
-          <div className="stat-card">
-            <span>Completed</span>
-            <strong>{stats.completed}</strong>
+          <div className="stat">
+            <div className="stat-ico is-info">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div className="stat-body">
+              <div className="stat-label">Completed</div>
+              <div className="stat-value">{stats.completed}</div>
+            </div>
           </div>
-          <div className="stat-card">
-            <span>Stopped</span>
-            <strong>{stats.stopped}</strong>
+          <div className="stat">
+            <div className="stat-ico is-warn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            </div>
+            <div className="stat-body">
+              <div className="stat-label">Stopped</div>
+              <div className="stat-value">{stats.stopped}</div>
+            </div>
           </div>
         </div>
 

@@ -7,7 +7,10 @@ import AutomationSettings from "../models/AutomationSettings.js";
 import { sendSMS } from "../services/twilioService.js";
 import { createSystemLog } from "../services/systemLogService.js";
 import { isValidNormalizedPhone } from "../utils/phone.js";
-import { resolveContactSmsEligibility } from "../services/phoneIntelligenceService.js";
+import {
+  resolveContactSmsEligibility,
+  isAllowedSmsLineType,
+} from "../services/phoneIntelligenceService.js";
 import { renderTemplate, buildContactTemplateVariables } from "../utils/template.js";
 
 function getSortedSteps(campaign) {
@@ -217,7 +220,16 @@ export async function runAutomationCycle() {
 
           continue;
         }
-        if (contact.lineTypeStatus === "blocked") {
+        // Re-evaluate any cached line type against the CURRENT allowed set so
+        // that changing allowedLineTypes takes effect without waiting for the
+        // per-contact lookup cache to expire.
+        if (
+          contact.lineTypeNormalized &&
+          !isAllowedSmsLineType(
+            contact.lineTypeNormalized,
+            settings.allowedLineTypes
+          )
+        ) {
           enrollment.failureCount = (enrollment.failureCount || 0) + 1;
           enrollment.lastError = `Blocked line type (${contact.lineTypeNormalized || contact.lineTypeRaw || "unknown"})`;
           enrollment.status = "stopped";
@@ -247,6 +259,7 @@ export async function runAutomationCycle() {
         const eligibility = await resolveContactSmsEligibility(contact, {
           maxAgeDays: 30,
           allowStaleAllowedCacheOnLookupFailure: true,
+          allowedLineTypes: settings.allowedLineTypes,
         });
 
         if (!eligibility.allowSend) {

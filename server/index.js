@@ -43,7 +43,9 @@ import webhookRoutes from "./routes/webhookRoutes.js";
 import campaignRoutes from "./routes/campaignRoutes.js";
 import enrollmentRoutes from "./routes/enrollmentRoutes.js";
 import automationSettingsRoutes from "./routes/automationSettingsRoutes.js";
+import twilioSettingsRoutes from "./routes/twilioSettingsRoutes.js";
 import systemLogRoutes from "./routes/systemLogRoutes.js";
+import templateRoutes from "./routes/templateRoutes.js";
 
 import { runAutomationCycle } from "./jobs/automationWorker.js";
 
@@ -94,7 +96,9 @@ app.use("/api/webhooks", webhookRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/enrollments", enrollmentRoutes);
 app.use("/api/settings", automationSettingsRoutes);
+app.use("/api/twilio-settings", twilioSettingsRoutes);
 app.use("/api/logs", systemLogRoutes);
+app.use("/api/templates", templateRoutes);
 
 async function startServer() {
   await connectDB();

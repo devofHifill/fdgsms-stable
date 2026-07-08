@@ -32,6 +32,12 @@ const automationSettingsSchema = new mongoose.Schema(
       default: 20,
       min: 1,
     },
+    // Phone line types (normalized) allowed for SMS sending. Numbers whose
+    // Twilio line-type lookup falls outside this set are blocked.
+    allowedLineTypes: {
+      type: [String],
+      default: ["mobile"],
+    },
   },
   { timestamps: true }
 );
