@@ -134,6 +134,26 @@ export async function runAutomationCycle() {
           continue;
         }
 
+        if (contact.optedOut) {
+          enrollment.status = "stopped";
+          enrollment.stopReason = "opted_out";
+          enrollment.nextSendAt = null;
+
+          await enrollment.save();
+
+          await createSystemLog({
+            level: "info",
+            category: "automation",
+            event: "automation_stopped_opted_out",
+            message: "Automation stopped because contact opted out",
+            contactId: contact._id,
+            enrollmentId: enrollment._id,
+            campaignId: campaign._id,
+          });
+
+          continue;
+        }
+
         if (!campaign.isActive) {
           enrollment.status = "stopped";
           enrollment.stopReason = "campaign_inactive";

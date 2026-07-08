@@ -54,6 +54,12 @@ export async function enrollContact(req, res) {
       return res.status(404).json({ message: "Contact not found" });
     }
 
+    if (contact.optedOut) {
+      return res.status(400).json({
+        message: "Contact has opted out and cannot be enrolled",
+      });
+    }
+
     if (!campaign) {
       return res.status(404).json({ message: "Campaign not found" });
     }
@@ -171,10 +177,16 @@ export async function bulkEnrollContacts(req, res) {
       _id: { $in: uniqueContactIds },
       isDeleted: false,
     })
-      .select("_id")
+      .select("_id optedOut")
       .lean();
 
-    const validContactIds = new Set(contacts.map((item) => String(item._id)));
+    // Opted-out contacts are ineligible (compliance) and excluded here, so the
+    // existing skip accounting reports them under skippedContactIds.
+    const validContactIds = new Set(
+      contacts
+        .filter((item) => !item.optedOut)
+        .map((item) => String(item._id))
+    );
 
     const existing = await Enrollment.find({
       contactId: { $in: uniqueContactIds },
