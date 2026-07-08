@@ -19,6 +19,11 @@ import SMSMessage from "../models/SMSMessage.js";
 import Conversation from "../models/Conversation.js";
 import Enrollment from "../models/Enrollment.js";
 import { normalizePhone, isValidNormalizedPhone } from "../utils/phone.js";
+import {
+  classifyInboundKeyword,
+  applyOptOut,
+  applyOptIn,
+} from "../utils/optOut.js";
 import { createSystemLog } from "../services/systemLogService.js";
 
 export async function handleInboundSMS(req, res) {
@@ -116,6 +121,50 @@ export async function handleInboundSMS(req, res) {
         upsert: true,
       }
     );
+
+    // 🛑 Compliance keywords take precedence over normal reply handling.
+    // The app sends no confirmation reply — carrier-level Advanced Opt-Out
+    // handles the legally required STOP/START responses.
+    const keyword = classifyInboundKeyword(Body);
+
+    if (keyword === "stop") {
+      const { stoppedEnrollments } = await applyOptOut(contact);
+
+      await createSystemLog({
+        level: "info",
+        category: "webhook",
+        event: "inbound_sms_opt_out",
+        message: "Contact opted out via STOP keyword",
+        contactId: contact._id,
+        metadata: {
+          from: From,
+          to: To,
+          messageSid: MessageSid || "",
+          stoppedEnrollments,
+        },
+      });
+
+      return res.status(200).send("OK");
+    }
+
+    if (keyword === "start") {
+      await applyOptIn(contact);
+
+      await createSystemLog({
+        level: "info",
+        category: "webhook",
+        event: "inbound_sms_opt_in",
+        message: "Contact opted back in via START keyword",
+        contactId: contact._id,
+        metadata: {
+          from: From,
+          to: To,
+          messageSid: MessageSid || "",
+        },
+      });
+
+      return res.status(200).send("OK");
+    }
 
     await Contact.findByIdAndUpdate(contact._id, {
       $set: {
