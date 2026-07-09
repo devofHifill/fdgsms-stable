@@ -235,12 +235,14 @@ export default function AiSettingsPage() {
             {/* 1 — Master controls */}
             <section className="card settings-card">
               <h2>Master Controls</h2>
-              <label className="checkbox-row">
+              <label className="switch-row">
                 <input
                   type="checkbox"
+                  className="switch-input"
                   checked={form.enabled}
                   onChange={(e) => setField("enabled", e.target.checked)}
                 />
+                <span className="switch" aria-hidden="true" />
                 <span>AI replies enabled (global switch)</span>
               </label>
 
@@ -254,12 +256,14 @@ export default function AiSettingsPage() {
                   </select>
                 </label>
 
-                <label className="checkbox-row">
+                <label className="switch-row">
                   <input
                     type="checkbox"
+                    className="switch-input"
                     checked={form.defaultContactAiEnabled}
                     onChange={(e) => setField("defaultContactAiEnabled", e.target.checked)}
                   />
+                  <span className="switch" aria-hidden="true" />
                   <span>AI on by default for new contacts</span>
                 </label>
               </div>
@@ -393,8 +397,9 @@ export default function AiSettingsPage() {
                   </select>
                 </label>
               </div>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={form.messageFormat.stripNonGsm} onChange={(e) => setField("messageFormat.stripNonGsm", e.target.checked)} />
+              <label className="switch-row">
+                <input type="checkbox" className="switch-input" checked={form.messageFormat.stripNonGsm} onChange={(e) => setField("messageFormat.stripNonGsm", e.target.checked)} />
+                <span className="switch" aria-hidden="true" />
                 <span>Strip emoji / non-GSM characters</span>
               </label>
             </section>
@@ -418,8 +423,9 @@ export default function AiSettingsPage() {
                   </select>
                 </label>
               </div>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={form.volumeLimits.neverDoubleText} onChange={(e) => setField("volumeLimits.neverDoubleText", e.target.checked)} />
+              <label className="switch-row">
+                <input type="checkbox" className="switch-input" checked={form.volumeLimits.neverDoubleText} onChange={(e) => setField("volumeLimits.neverDoubleText", e.target.checked)} />
+                <span className="switch" aria-hidden="true" />
                 <span>Never double-text (wait for a reply before sending again)</span>
               </label>
             </section>
