@@ -46,6 +46,7 @@ import automationSettingsRoutes from "./routes/automationSettingsRoutes.js";
 import twilioSettingsRoutes from "./routes/twilioSettingsRoutes.js";
 import systemLogRoutes from "./routes/systemLogRoutes.js";
 import templateRoutes from "./routes/templateRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 
 import { runAutomationCycle } from "./jobs/automationWorker.js";
 import { runAiReplyCycle } from "./jobs/aiReplyWorker.js";
@@ -103,6 +104,7 @@ app.use("/api/settings", automationSettingsRoutes);
 app.use("/api/twilio-settings", twilioSettingsRoutes);
 app.use("/api/logs", systemLogRoutes);
 app.use("/api/templates", templateRoutes);
+app.use("/api/ai", aiRoutes);
 
 async function startServer() {
   await connectDB();
