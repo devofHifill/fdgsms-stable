@@ -22,6 +22,15 @@ function getInitials(name) {
   );
 }
 
+// Deterministic per-contact avatar color from the name (white initials on it).
+function avatarColor(name) {
+  const s = String(name || "");
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return `linear-gradient(135deg, hsl(${hue} 55% 45%), hsl(${(hue + 26) % 360} 60% 34%))`;
+}
+
 export default function ContactsPage() {
   const [contacts, setContacts] = useState([]);
   const [pagination, setPagination] = useState({
@@ -424,7 +433,10 @@ export default function ContactsPage() {
 
                           <td>
                             <div className="cell-id">
-                              <span className="row-avatar">
+                              <span
+                                className="row-avatar"
+                                style={{ background: avatarColor(contact.fullName) }}
+                              >
                                 {getInitials(contact.fullName)}
                               </span>
                               <span className="t-primary">

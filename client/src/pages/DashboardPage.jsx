@@ -33,6 +33,15 @@ function initials(name) {
   return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || "?";
 }
 
+// Deterministic per-contact avatar color from the name (white initials on it).
+function avatarColor(name) {
+  const s = String(name || "");
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return `linear-gradient(135deg, hsl(${hue} 55% 45%), hsl(${(hue + 26) % 360} 60% 34%))`;
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
 
@@ -210,7 +219,10 @@ export default function DashboardPage() {
             recent.map((c) => (
               <div className="list-row" key={c._id}>
                 <div className="list-left">
-                  <span className="row-avatar">
+                  <span
+                    className="row-avatar"
+                    style={{ background: avatarColor(c.contact?.fullName) }}
+                  >
                     {initials(c.contact?.fullName)}
                   </span>
                   <div style={{ minWidth: 0 }}>
