@@ -48,12 +48,16 @@ import systemLogRoutes from "./routes/systemLogRoutes.js";
 import templateRoutes from "./routes/templateRoutes.js";
 
 import { runAutomationCycle } from "./jobs/automationWorker.js";
+import { runAiReplyCycle } from "./jobs/aiReplyWorker.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const AUTOMATION_INTERVAL_MS = 60000;
+// Shorter than automation so replies feel timely; the interval also doubles as
+// the human-takeover race buffer before the AI answers.
+const AI_REPLY_INTERVAL_MS = 20000;
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -113,6 +117,12 @@ async function startServer() {
       console.error("Automation interval error:", error);
     });
   }, AUTOMATION_INTERVAL_MS);
+
+  setInterval(() => {
+    runAiReplyCycle().catch((error) => {
+      console.error("AI reply interval error:", error);
+    });
+  }, AI_REPLY_INTERVAL_MS);
 
   return server;
 }
