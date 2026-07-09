@@ -10,11 +10,13 @@
 
 import { buildSystemPrompt, buildMessages } from "./ai/promptBuilder.js";
 import { parseAiReply } from "./ai/responseParser.js";
+import { decryptSecret } from "../utils/secretBox.js";
 
-// Resolve the API key: an explicit key in settings wins, else the provider's
-// env var (OPENAI_API_KEY, GEMINI_API_KEY, …).
+// Resolve the API key: an explicit key in settings wins (decrypted from its
+// at-rest form; plaintext passes through), else the provider's env var
+// (OPENAI_API_KEY, GEMINI_API_KEY, …).
 export function resolveApiKey(settings = {}) {
-  if (settings.apiKey) return settings.apiKey;
+  if (settings.apiKey) return decryptSecret(settings.apiKey);
   const provider = settings.provider || "openai";
   return process.env[`${provider.toUpperCase()}_API_KEY`] || "";
 }
