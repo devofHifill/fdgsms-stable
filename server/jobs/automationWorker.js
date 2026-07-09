@@ -154,23 +154,10 @@ export async function runAutomationCycle() {
           continue;
         }
 
+        // Paused campaign (isActive=false) — skip this cycle WITHOUT stopping the
+        // enrollment, so it resumes cleanly when the campaign is reactivated.
+        // (Reversible pause: stop → fix the message → resume.)
         if (!campaign.isActive) {
-          enrollment.status = "stopped";
-          enrollment.stopReason = "campaign_inactive";
-          enrollment.nextSendAt = null;
-
-          await enrollment.save();
-
-          await createSystemLog({
-            level: "warn",
-            category: "automation",
-            event: "automation_stopped_campaign_inactive",
-            message: "Automation stopped because campaign is inactive",
-            contactId: contact._id,
-            enrollmentId: enrollment._id,
-            campaignId: campaign._id,
-          });
-
           continue;
         }
 

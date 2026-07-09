@@ -357,7 +357,13 @@ export default function ContactsPage() {
             ))}
           </select>
 
-          <button onClick={handleBulkEnroll} disabled={bulkEnrolling}>
+          <button
+            className="btn-primary"
+            onClick={handleBulkEnroll}
+            disabled={
+              bulkEnrolling || !selectedContactIds.length || !selectedCampaignId
+            }
+          >
             {bulkEnrolling ? "Enrolling..." : "Enroll Selected"}
           </button>
         </div>

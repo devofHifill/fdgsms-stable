@@ -4,6 +4,7 @@ import AppLayout from "../components/AppLayout";
 
 export default function UploadPage() {
   const [file, setFile] = useState(null);
+  const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -18,6 +19,18 @@ export default function UploadPage() {
     loadCampaigns();
   }, []);
 
+  // Prevent the browser from navigating to / opening a file if it's dropped
+  // anywhere on the page (outside the dropzone).
+  useEffect(() => {
+    const prevent = (e) => e.preventDefault();
+    window.addEventListener("dragover", prevent);
+    window.addEventListener("drop", prevent);
+    return () => {
+      window.removeEventListener("dragover", prevent);
+      window.removeEventListener("drop", prevent);
+    };
+  }, []);
+
   async function loadCampaigns() {
     try {
       const data = await apiFetch("/campaigns");
@@ -27,12 +40,37 @@ export default function UploadPage() {
     }
   }
 
-  function handleFileChange(e) {
-    const selected = e.target.files?.[0] || null;
+  function acceptFile(selected) {
+    if (!selected) return;
+    if (!/\.(csv|xlsx|xls)$/i.test(selected.name)) {
+      setError("Unsupported file type. Please use .csv, .xlsx, or .xls");
+      return;
+    }
     setFile(selected);
     setPreview(null);
     setError("");
     setSuccess("");
+  }
+
+  function handleFileChange(e) {
+    acceptFile(e.target.files?.[0] || null);
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+  }
+  function handleDragEnter(e) {
+    e.preventDefault();
+    setDragging(true);
+  }
+  function handleDragLeave(e) {
+    e.preventDefault();
+    setDragging(false);
+  }
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    acceptFile(e.dataTransfer?.files?.[0] || null);
   }
 
   async function handlePreview() {
@@ -131,7 +169,13 @@ export default function UploadPage() {
         </div>
 
         <div className="upload-card">
-          <label className="dropzone">
+          <label
+            className={`dropzone ${dragging ? "dragging" : ""}`}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <div className="dz-ico">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5-5 5 5"/><path d="M12 5v12"/></svg>
             </div>
