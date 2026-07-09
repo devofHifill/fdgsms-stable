@@ -293,12 +293,14 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--primary)
 
 /* primary emphasis: form submits + login */
 .chat-panel button[type="submit"],
+.chat-panel button.btn-primary,
 .login-card button {
   background: linear-gradient(180deg, var(--primary), var(--primary-600));
   border-color: transparent; color: #fff;
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
 }
 .chat-panel button[type="submit"]:hover,
+.chat-panel button.btn-primary:hover,
 .login-card button:hover {
   background: linear-gradient(180deg, var(--primary), var(--primary-600));
   border-color: transparent; box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
@@ -640,6 +642,16 @@ p.status-success {
 
 /* Phase 5: enrollment controls */
 .ctx-actions { display: flex; gap: 8px; margin-top: var(--s3); flex-wrap: wrap; }
+
+/* Context-panel drawer toggle (shown only when the panel is off-canvas ≤1280px) */
+.chat-header-actions { display: flex; align-items: center; gap: 8px; }
+.ctx-toggle {
+  display: none; width: 34px; height: 34px; place-items: center;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface-2); color: var(--muted); cursor: pointer;
+}
+.ctx-toggle:hover { background: var(--hover); color: var(--text); }
+.ctx-scrim { display: none; }
 .ctx-actions button {
   padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
   border: 1px solid var(--border); border-radius: var(--r-sm);
@@ -728,13 +740,12 @@ p.status-success {
 .bubble.inbound .bubble-meta { color: var(--muted); }
 .bubble-delete-btn {
   position: absolute; top: 5px; right: 5px; width: 22px; height: 22px;
-  display: inline-grid; place-items: center; border: 1px solid var(--border); border-radius: 6px;
-  background: var(--surface-2); color: var(--muted); cursor: pointer; opacity: 0;
-  box-shadow: var(--shadow-sm);
-  transition: opacity 0.14s, background 0.14s, color 0.14s, border-color 0.14s;
+  display: inline-grid; place-items: center; border: none; border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5); color: #fff; cursor: pointer; opacity: 0;
+  transition: opacity 0.14s, background 0.14s;
 }
 .bubble:hover .bubble-delete-btn { opacity: 1; }
-.bubble-delete-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+.bubble-delete-btn:hover { background: var(--danger); color: #fff; }
 
 .chat-input { display: grid; grid-template-columns: 1fr auto; gap: var(--s3); padding: var(--s4) var(--s5); border-top: 1px solid var(--border); background: var(--surface); }
 .chat-input textarea {
@@ -861,6 +872,7 @@ a.list-row + a.list-row { margin-top: var(--s2); }
   background: var(--surface-2); transition: border-color 0.14s, background 0.14s;
 }
 .dropzone:hover { border-color: var(--primary); background: var(--hover); }
+.dropzone.dragging { border-color: var(--primary); background: var(--primary-tint); }
 .dropzone .dz-ico { width: 46px; height: 46px; margin: 0 auto var(--s3); border-radius: var(--r); display: grid; place-items: center; background: var(--primary-tint); color: var(--primary); }
 .dropzone .dz-title { font-weight: 600; }
 .dropzone .dz-sub { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
@@ -890,7 +902,17 @@ a.list-row + a.list-row { margin-top: var(--s2); }
    --------------------------------------------------------- */
 @media (max-width: 1280px) {
   .inbox { grid-template-columns: 340px minmax(0, 1fr); }
-  .inbox-context { display: none; }
+  /* Context panel (contact + automation + AI controls) becomes a right drawer. */
+  .inbox-context {
+    position: fixed; top: 0; right: 0; height: 100vh; width: min(360px, 90vw);
+    transform: translateX(100%); transition: transform 0.22s ease;
+    box-shadow: var(--shadow-lg); z-index: 45;
+  }
+  .inbox.show-context .inbox-context { transform: translateX(0); }
+  .inbox.show-context .ctx-scrim {
+    display: block; position: fixed; inset: 0; z-index: 44; background: rgba(0, 0, 0, 0.5);
+  }
+  .ctx-toggle { display: inline-grid; }
 }
 
 @media (max-width: 1100px) {

@@ -39,6 +39,16 @@ function getInitials(name) {
   return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || "?";
 }
 
+// Deterministic per-contact avatar color derived from the name, so each contact
+// gets a stable, distinct hue (white initials stay readable on it).
+function avatarColor(name) {
+  const s = String(name || "");
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return `linear-gradient(135deg, hsl(${hue} 55% 45%), hsl(${(hue + 26) % 360} 60% 34%))`;
+}
+
 function dayLabel(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "";
@@ -95,6 +105,8 @@ export default function InboxPage() {
   const [draft, setDraft] = useState(null);
   const [draftText, setDraftText] = useState("");
   const [draftBusy, setDraftBusy] = useState(false);
+  // On ≤1280px the context panel becomes a slide-in drawer.
+  const [showContext, setShowContext] = useState(false);
 
   const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -605,7 +617,7 @@ export default function InboxPage() {
 
   return (
     <AppLayout>
-      <div className="inbox">
+      <div className={`inbox ${showContext ? "show-context" : ""}`}>
         <aside className="inbox-sidebar">
           <div className="inbox-sidebar-header">
             <h1>Inbox</h1>
@@ -646,7 +658,10 @@ export default function InboxPage() {
                   className={`conversation ${active?._id === c._id ? "active" : ""} ${unread > 0 ? "is-unread" : ""}`}
                   onClick={() => handleSelect(c)}
                 >
-                  <span className="conv-avatar">
+                  <span
+                    className="conv-avatar"
+                    style={{ background: avatarColor(c.contact?.fullName) }}
+                  >
                     {getInitials(c.contact?.fullName)}
                   </span>
                   <span className="conv-main">
@@ -685,7 +700,10 @@ export default function InboxPage() {
             <>
               <div className="chat-header">
                 <div className="chat-id-group">
-                  <span className="conv-avatar">
+                  <span
+                    className="conv-avatar"
+                    style={{ background: avatarColor(active.contact?.fullName) }}
+                  >
                     {getInitials(active.contact?.fullName)}
                   </span>
                   <div className="chat-header-main">
@@ -698,15 +716,26 @@ export default function InboxPage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="chat-delete-btn"
-                  onClick={handleDeleteConversation}
-                  title="Delete this conversation"
-                >
-                  <Trash2 size={16} />
-                  <span>Delete chat</span>
-                </button>
+                <div className="chat-header-actions">
+                  <button
+                    type="button"
+                    className="ctx-toggle"
+                    onClick={() => setShowContext((v) => !v)}
+                    title="Contact & AI details"
+                    aria-label="Toggle contact & AI details"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-delete-btn"
+                    onClick={handleDeleteConversation}
+                    title="Delete this conversation"
+                  >
+                    <Trash2 size={16} />
+                    <span>Delete chat</span>
+                  </button>
+                </div>
               </div>
 
               {error ? <div className="inbox-error-banner">{error}</div> : null}
@@ -912,7 +941,10 @@ export default function InboxPage() {
           {active ? (
             <>
               <div className="ctx-head">
-                <span className="conv-avatar">
+                <span
+                  className="conv-avatar"
+                  style={{ background: avatarColor(active.contact?.fullName) }}
+                >
                   {getInitials(active.contact?.fullName)}
                 </span>
                 <div>
@@ -1050,6 +1082,12 @@ export default function InboxPage() {
             <div className="ctx-empty">Select a conversation to see contact details.</div>
           )}
         </aside>
+
+        <div
+          className="ctx-scrim"
+          onClick={() => setShowContext(false)}
+          aria-hidden="true"
+        />
       </div>
     </AppLayout>
   );
