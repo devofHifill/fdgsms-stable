@@ -742,8 +742,9 @@ p.status-success {
   position: absolute; top: 5px; right: 5px; width: 24px; height: 24px;
   display: inline-grid; place-items: center; border: none; border-radius: 50%;
   background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer;
-  opacity: 0.85; transition: opacity 0.14s, background 0.14s, transform 0.05s;
+  opacity: 0; transition: opacity 0.14s, background 0.14s, transform 0.05s;
 }
+/* Reveal only when the bubble is hovered; turn red on the button's own hover. */
 .bubble:hover .bubble-delete-btn { opacity: 1; }
 .bubble-delete-btn:hover { background: var(--danger); color: #fff; }
 .bubble-delete-btn:active { transform: scale(0.92); }
