@@ -739,15 +739,34 @@ p.status-success {
 .bubble-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 10.5px; opacity: 0.82; }
 .bubble.inbound .bubble-meta { color: var(--muted); }
 .bubble-delete-btn {
-  position: absolute; top: 5px; right: 5px; width: 24px; height: 24px;
-  display: inline-grid; place-items: center; border: none; border-radius: 50%;
-  background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer;
-  opacity: 0; transition: opacity 0.14s, background 0.14s, transform 0.05s;
+  position: absolute !important;
+  top: 5px !important;
+  right: 5px !important;
+  width: 24px !important;
+  height: 24px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border: none !important;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45) !important;
+  color: #fff !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  transition: opacity 0.14s, background 0.14s, transform 0.05s !important;
 }
-/* Reveal only when the bubble is hovered; turn red on the button's own hover. */
-.bubble:hover .bubble-delete-btn { opacity: 1; }
-.bubble-delete-btn:hover { background: var(--danger); color: #fff; }
-.bubble-delete-btn:active { transform: scale(0.92); }
+
+.bubble:hover .bubble-delete-btn {
+  opacity: 1 !important;
+}
+
+.bubble-delete-btn:hover {
+  background: var(--danger) !important;
+  color: #fff !important;
+}
+
+.bubble-delete-btn:active {
+  transform: scale(0.92) !important;
+}
 
 .chat-input { display: grid; grid-template-columns: 1fr auto; gap: var(--s3); padding: var(--s4) var(--s5); border-top: 1px solid var(--border); background: var(--surface); }
 .chat-input textarea {
