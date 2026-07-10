@@ -9,6 +9,10 @@ import {
   approveDraft,
   rejectDraft,
 } from "../controllers/aiController.js";
+import {
+  getAiAnalytics,
+  testAiReply,
+} from "../controllers/aiAnalyticsController.js";
 
 const router = express.Router();
 
@@ -27,5 +31,9 @@ router.post("/conversations/:contactId/release", requireAuth, releaseTakeover);
 router.get("/drafts", requireAuth, listDrafts);
 router.post("/drafts/:jobId/approve", requireAuth, approveDraft);
 router.post("/drafts/:jobId/reject", requireAuth, rejectDraft);
+
+// Analytics + test/preview (Phase 7)
+router.get("/analytics", requireAuth, getAiAnalytics);
+router.post("/test-reply", requireAuth, testAiReply);
 
 export default router;
