@@ -72,11 +72,21 @@ export async function sendSMS({ to, body }) {
   const config = await getActiveTwilioConfig();
   const client = clientFromConfig(config);
 
+  // If a public URL is set, tell Twilio where to POST delivery-status updates
+  // (delivered / undelivered / failed + error code). Received by
+  // POST /api/webhooks/twilio/status → handleStatusCallback, which writes the
+  // status + errorCode back onto the SMSMessage. Free of charge from Twilio.
+  const statusCallback = process.env.PUBLIC_URL
+    ? `${process.env.PUBLIC_URL.replace(/\/$/, "")}/api/webhooks/twilio/status`
+    : undefined;
+
+  const params = { to, body };
+  if (statusCallback) params.statusCallback = statusCallback;
+
   if (config.messagingServiceSid) {
     return await client.messages.create({
       messagingServiceSid: config.messagingServiceSid,
-      to,
-      body,
+      ...params,
     });
   }
 
@@ -86,7 +96,6 @@ export async function sendSMS({ to, body }) {
 
   return await client.messages.create({
     from: config.phoneNumber,
-    to,
-    body,
+    ...params,
   });
 }

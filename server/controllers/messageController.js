@@ -379,3 +379,51 @@ export async function getMessagesByContact(req, res) {
     });
   }
 }
+
+// GET /api/messages/delivery-report?days=30
+// Outbound SMS delivery breakdown + top Twilio error codes + recent failures.
+// Populated by the Twilio status callback (handleStatusCallback).
+export async function getDeliveryReport(req, res) {
+  try {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const base = { direction: "outbound", createdAt: { $gte: since } };
+
+    const [statusAgg, errorAgg, recentFailures, total] = await Promise.all([
+      SMSMessage.aggregate([
+        { $match: base },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+      SMSMessage.aggregate([
+        { $match: { ...base, errorCode: { $nin: ["", null] } } },
+        { $group: { _id: "$errorCode", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 20 },
+      ]),
+      SMSMessage.find({ ...base, status: { $in: ["undelivered", "failed"] } })
+        .sort({ createdAt: -1 })
+        .limit(25)
+        .select("phone normalizedPhone status errorCode messageType createdAt")
+        .lean(),
+      SMSMessage.countDocuments(base),
+    ]);
+
+    const byStatus = statusAgg.reduce((acc, r) => {
+      acc[r._id || "unknown"] = r.count;
+      return acc;
+    }, {});
+    const delivered = byStatus.delivered || 0;
+
+    return res.status(200).json({
+      rangeDays: days,
+      totalOutbound: total,
+      deliveryRate: total ? Math.round((delivered / total) * 100) : 0,
+      byStatus,
+      errorCodes: errorAgg.map((r) => ({ code: r._id, count: r.count })),
+      recentFailures,
+    });
+  } catch (error) {
+    console.error("getDeliveryReport error:", error);
+    return res.status(500).json({ message: "Failed to load delivery report" });
+  }
+}
