@@ -11,6 +11,7 @@ import AiAnalyticsPage from "./pages/AiAnalyticsPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import InboxPage from "./pages/InboxPage";
 import LogsPage from "./pages/LogsPage";
+import DeliveryReportPage from "./pages/DeliveryReportPage";
 import "./App.css";
 
 export default function App() {
@@ -38,6 +39,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <LogsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/delivery"
+        element={
+          <ProtectedRoute>
+            <DeliveryReportPage />
           </ProtectedRoute>
         }
       />
