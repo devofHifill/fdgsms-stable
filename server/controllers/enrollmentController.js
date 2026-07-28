@@ -60,6 +60,12 @@ export async function enrollContact(req, res) {
       });
     }
 
+    if (contact.deliveryBlocked) {
+      return res.status(400).json({
+        message: "Contact is blocked after a failed SMS delivery and cannot be enrolled",
+      });
+    }
+
     if (!campaign) {
       return res.status(404).json({ message: "Campaign not found" });
     }
@@ -177,14 +183,14 @@ export async function bulkEnrollContacts(req, res) {
       _id: { $in: uniqueContactIds },
       isDeleted: false,
     })
-      .select("_id optedOut")
+      .select("_id optedOut deliveryBlocked")
       .lean();
 
-    // Opted-out contacts are ineligible (compliance) and excluded here, so the
-    // existing skip accounting reports them under skippedContactIds.
+    // Opted-out and delivery-blocked contacts are ineligible and excluded here,
+    // so the existing skip accounting reports them under skippedContactIds.
     const validContactIds = new Set(
       contacts
-        .filter((item) => !item.optedOut)
+        .filter((item) => !item.optedOut && !item.deliveryBlocked)
         .map((item) => String(item._id))
     );
 

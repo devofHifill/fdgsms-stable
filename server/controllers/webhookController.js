@@ -292,10 +292,41 @@ export async function handleStatusCallback(req, res) {
     }
 
     if (Object.keys(update).length) {
-      await SMSMessage.findOneAndUpdate(
+      const message = await SMSMessage.findOneAndUpdate(
         { providerMessageSid: MessageSid },
-        { $set: update }
+        { $set: update },
+        { new: true }
       );
+
+      // When delivery fails, block future sends to this number (like opt-out)
+      // so we don't keep re-sending to an undeliverable handset.
+      // NOTE: to only block permanent failures (30005/30006/…) and let transient
+      // ones (30003) retry, gate this on a HARD_FAIL error-code set instead.
+      const FAILED = new Set(["undelivered", "failed"]);
+      if (message?.contactId && FAILED.has(update.status)) {
+        await Contact.findByIdAndUpdate(message.contactId, {
+          $set: {
+            deliveryBlocked: true,
+            deliveryBlockedAt: new Date(),
+            lastDeliveryStatus: update.status,
+            lastDeliveryErrorCode: update.errorCode || "",
+          },
+          $inc: { deliveryFailureCount: 1 },
+        });
+
+        await createSystemLog({
+          level: "warn",
+          category: "sms",
+          event: "delivery_block_set",
+          message: `Contact blocked after ${update.status} delivery (${update.errorCode || "no code"})`,
+          contactId: message.contactId,
+          metadata: {
+            messageSid: MessageSid,
+            status: update.status,
+            errorCode: update.errorCode || "",
+          },
+        });
+      }
     }
 
     return res.status(200).send("OK");

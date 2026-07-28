@@ -37,6 +37,7 @@ export default function DeliveryReportPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState("");
 
   async function load(range) {
     try {
@@ -62,6 +63,19 @@ export default function DeliveryReportPage() {
     load(r);
   }
 
+  async function unblock(contactId) {
+    try {
+      setBusyId(contactId);
+      setError("");
+      await apiFetch(`/messages/delivery-unblock/${contactId}`, { method: "PATCH" });
+      await load(days);
+    } catch (err) {
+      setError(err.message || "Failed to unblock");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   const d = data || {};
   const s = d.byStatus || {};
   const cards = [
@@ -71,6 +85,7 @@ export default function DeliveryReportPage() {
     { n: s.sent ?? 0, l: "Sent (awaiting receipt)" },
     { n: s.undelivered ?? 0, l: "Undelivered" },
     { n: s.failed ?? 0, l: "Failed" },
+    { n: d.blockedCount ?? 0, l: "Blocked numbers" },
   ];
 
   return (
@@ -122,6 +137,49 @@ export default function DeliveryReportPage() {
                 </table>
               ) : (
                 <p className="muted">No delivery errors in this range.</p>
+              )}
+            </section>
+
+            <section className="card settings-card">
+              <h2>Blocked numbers</h2>
+              <p className="muted">
+                Auto-blocked after a failed delivery — no further SMS are sent to them. Unblock to allow sending again.
+              </p>
+              {d.blockedContacts?.length ? (
+                <table className="preview-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th><th>Phone</th><th>Last error</th><th>Fails</th><th>Since</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.blockedContacts.map((c) => (
+                      <tr key={c._id}>
+                        <td>{c.fullName || "-"}</td>
+                        <td>{c.normalizedPhone || c.phone || "-"}</td>
+                        <td>
+                          {c.lastDeliveryErrorCode
+                            ? `${c.lastDeliveryErrorCode} — ${errMeaning(c.lastDeliveryErrorCode)}`
+                            : c.lastDeliveryStatus || "-"}
+                        </td>
+                        <td>{c.deliveryFailureCount ?? 0}</td>
+                        <td>{fmtWhen(c.deliveryBlockedAt)}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => unblock(c._id)}
+                            disabled={busyId === c._id}
+                          >
+                            {busyId === c._id ? "..." : "Unblock"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="muted">No blocked numbers.</p>
               )}
             </section>
 

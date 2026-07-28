@@ -154,6 +154,26 @@ export async function runAutomationCycle() {
           continue;
         }
 
+        if (contact.deliveryBlocked) {
+          enrollment.status = "stopped";
+          enrollment.stopReason = "delivery_blocked";
+          enrollment.nextSendAt = null;
+
+          await enrollment.save();
+
+          await createSystemLog({
+            level: "warn",
+            category: "automation",
+            event: "automation_stopped_delivery_blocked",
+            message: "Automation stopped because contact is delivery-blocked",
+            contactId: contact._id,
+            enrollmentId: enrollment._id,
+            campaignId: campaign._id,
+          });
+
+          continue;
+        }
+
         // Paused campaign (isActive=false) — skip this cycle WITHOUT stopping the
         // enrollment, so it resumes cleanly when the campaign is reactivated.
         // (Reversible pause: stop → fix the message → resume.)

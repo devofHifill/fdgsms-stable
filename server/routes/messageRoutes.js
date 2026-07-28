@@ -5,13 +5,15 @@ import {
   getMessagesByContact,
   retryMessage,
   getDeliveryReport,
+  unblockDelivery,
 } from "../controllers/messageController.js";
 
 const router = express.Router();
 
 router.post("/send", requireAuth, sendManualMessage);
-// Literal route before param routes.
+// Literal routes before param routes.
 router.get("/delivery-report", requireAuth, getDeliveryReport);
+router.patch("/delivery-unblock/:contactId", requireAuth, unblockDelivery);
 router.get("/contact/:contactId", requireAuth, getMessagesByContact);
 router.post("/:id/retry", requireAuth, retryMessage);
 
