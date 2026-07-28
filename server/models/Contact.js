@@ -57,6 +57,31 @@ const contactSchema = new mongoose.Schema(
       default: null,
     },
 
+    // 📵 DELIVERY BLOCK — set when Twilio reports a message undelivered/failed.
+    // Blocks future sends to this number (like opt-out) until manually cleared,
+    // so we stop paying to text an undeliverable handset.
+    deliveryBlocked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deliveryFailureCount: {
+      type: Number,
+      default: 0,
+    },
+    lastDeliveryStatus: {
+      type: String,
+      default: "",
+    },
+    lastDeliveryErrorCode: {
+      type: String,
+      default: "",
+    },
+    deliveryBlockedAt: {
+      type: Date,
+      default: null,
+    },
+
     // 🤖 AI REPLY — per-contact AI mode (layer 2, persistent, tri-state).
     // "default" defers to the global AiSettings default; forced_on/off override it.
     aiMode: {

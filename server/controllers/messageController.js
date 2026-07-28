@@ -12,6 +12,7 @@
 // In FDGSMS:
 
 // This is the controller used when you manually send a text from the dashboard.
+import mongoose from "mongoose";
 import Contact from "../models/Contact.js";
 import SMSMessage from "../models/SMSMessage.js";
 import AutomationSettings from "../models/AutomationSettings.js";
@@ -65,6 +66,12 @@ export async function sendManualMessage(req, res) {
 
       return res.status(403).json({
         message: "This contact has opted out and cannot be messaged.",
+      });
+    }
+
+    if (contact.deliveryBlocked) {
+      return res.status(403).json({
+        message: `This number is blocked after a failed delivery${contact.lastDeliveryErrorCode ? ` (${contact.lastDeliveryErrorCode})` : ""}. Unblock it to resend.`,
       });
     }
 
@@ -284,6 +291,12 @@ export async function retryMessage(req, res) {
         .json({ message: "This contact has opted out and cannot be messaged." });
     }
 
+    if (contact.deliveryBlocked) {
+      return res
+        .status(403)
+        .json({ message: "This number is blocked after a failed delivery. Unblock it to resend." });
+    }
+
     try {
       const providerResponse = await sendSMS({
         to: contact.normalizedPhone,
@@ -389,24 +402,31 @@ export async function getDeliveryReport(req, res) {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const base = { direction: "outbound", createdAt: { $gte: since } };
 
-    const [statusAgg, errorAgg, recentFailures, total] = await Promise.all([
-      SMSMessage.aggregate([
-        { $match: base },
-        { $group: { _id: "$status", count: { $sum: 1 } } },
-      ]),
-      SMSMessage.aggregate([
-        { $match: { ...base, errorCode: { $nin: ["", null] } } },
-        { $group: { _id: "$errorCode", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 20 },
-      ]),
-      SMSMessage.find({ ...base, status: { $in: ["undelivered", "failed"] } })
-        .sort({ createdAt: -1 })
-        .limit(25)
-        .select("phone normalizedPhone status errorCode messageType createdAt")
-        .lean(),
-      SMSMessage.countDocuments(base),
-    ]);
+    const [statusAgg, errorAgg, recentFailures, total, blockedContacts, blockedCount] =
+      await Promise.all([
+        SMSMessage.aggregate([
+          { $match: base },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        SMSMessage.aggregate([
+          { $match: { ...base, errorCode: { $nin: ["", null] } } },
+          { $group: { _id: "$errorCode", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 20 },
+        ]),
+        SMSMessage.find({ ...base, status: { $in: ["undelivered", "failed"] } })
+          .sort({ createdAt: -1 })
+          .limit(25)
+          .select("phone normalizedPhone status errorCode messageType createdAt")
+          .lean(),
+        SMSMessage.countDocuments(base),
+        Contact.find({ deliveryBlocked: true })
+          .sort({ deliveryBlockedAt: -1 })
+          .limit(50)
+          .select("fullName phone normalizedPhone lastDeliveryStatus lastDeliveryErrorCode deliveryFailureCount deliveryBlockedAt")
+          .lean(),
+        Contact.countDocuments({ deliveryBlocked: true }),
+      ]);
 
     const byStatus = statusAgg.reduce((acc, r) => {
       acc[r._id || "unknown"] = r.count;
@@ -421,9 +441,37 @@ export async function getDeliveryReport(req, res) {
       byStatus,
       errorCodes: errorAgg.map((r) => ({ code: r._id, count: r.count })),
       recentFailures,
+      blockedCount,
+      blockedContacts,
     });
   } catch (error) {
     console.error("getDeliveryReport error:", error);
     return res.status(500).json({ message: "Failed to load delivery report" });
+  }
+}
+
+// PATCH /api/messages/delivery-unblock/:contactId
+// Clears the delivery block so the number can be sent to again.
+export async function unblockDelivery(req, res) {
+  try {
+    const { contactId } = req.params;
+    if (!mongoose.isValidObjectId(contactId)) {
+      return res.status(400).json({ message: "Invalid contact id" });
+    }
+
+    const contact = await Contact.findByIdAndUpdate(
+      contactId,
+      { $set: { deliveryBlocked: false, deliveryFailureCount: 0 } },
+      { new: true }
+    ).lean();
+
+    if (!contact) {
+      return res.status(404).json({ message: "Contact not found" });
+    }
+
+    return res.status(200).json({ message: "Delivery block cleared", id: contactId });
+  } catch (error) {
+    console.error("unblockDelivery error:", error);
+    return res.status(500).json({ message: "Failed to unblock" });
   }
 }
