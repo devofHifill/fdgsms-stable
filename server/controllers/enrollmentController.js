@@ -54,6 +54,12 @@ export async function enrollContact(req, res) {
       return res.status(404).json({ message: "Contact not found" });
     }
 
+    if (contact.optedOut) {
+      return res.status(400).json({
+        message: "Contact has opted out and cannot be enrolled",
+      });
+    }
+
     if (!campaign) {
       return res.status(404).json({ message: "Campaign not found" });
     }
@@ -171,10 +177,16 @@ export async function bulkEnrollContacts(req, res) {
       _id: { $in: uniqueContactIds },
       isDeleted: false,
     })
-      .select("_id")
+      .select("_id optedOut")
       .lean();
 
-    const validContactIds = new Set(contacts.map((item) => String(item._id)));
+    // Opted-out contacts are ineligible (compliance) and excluded here, so the
+    // existing skip accounting reports them under skippedContactIds.
+    const validContactIds = new Set(
+      contacts
+        .filter((item) => !item.optedOut)
+        .map((item) => String(item._id))
+    );
 
     const existing = await Enrollment.find({
       contactId: { $in: uniqueContactIds },
@@ -260,13 +272,57 @@ export async function bulkEnrollContacts(req, res) {
 
 export async function getEnrollments(req, res) {
   try {
-    const items = await Enrollment.find()
-      .populate("contactId", "fullName phone normalizedPhone email")
-      .populate("campaignId", "name steps isActive")
-      .sort({ createdAt: -1 })
-      .lean();
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 500);
+    const skip = (page - 1) * limit;
 
-    return res.status(200).json({ items });
+    const status = String(req.query.status || "").trim();
+
+    const query = {};
+    if (status && status !== "all") {
+      query.status = status;
+    }
+
+    // Status counts are computed across ALL enrollments (ignoring the current
+    // filter/page) so the summary stat cards stay accurate regardless of paging.
+    const [items, total, statusCounts] = await Promise.all([
+      Enrollment.find(query)
+        .populate("contactId", "fullName phone normalizedPhone email")
+        .populate("campaignId", "name steps isActive")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Enrollment.countDocuments(query),
+      Enrollment.aggregate([
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const stats = statusCounts.reduce(
+      (acc, row) => {
+        if (row._id) acc[row._id] = row.count;
+        acc.total += row.count;
+        return acc;
+      },
+      { total: 0, active: 0, completed: 0, stopped: 0, paused: 0, replied: 0, failed: 0 }
+    );
+
+    return res.status(200).json({
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+        hasPrevPage: page > 1,
+      },
+      stats,
+      filters: {
+        status: status || "all",
+      },
+    });
   } catch (error) {
     return res.status(500).json({
       message: "Failed to fetch enrollments",

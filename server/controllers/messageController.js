@@ -53,6 +53,21 @@ export async function sendManualMessage(req, res) {
       });
     }
 
+    if (contact.optedOut) {
+      await createSystemLog({
+        level: "warn",
+        category: "sms",
+        event: "manual_send_blocked_opted_out",
+        message: "Manual send blocked because contact has opted out",
+        contactId: contact._id,
+        metadata: { phone: contact.normalizedPhone },
+      });
+
+      return res.status(403).json({
+        message: "This contact has opted out and cannot be messaged.",
+      });
+    }
+
     const text = String(body).trim();
 
     const automationSettings = await AutomationSettings.findOne({
@@ -261,6 +276,12 @@ export async function retryMessage(req, res) {
 
     if (!contact || !contact.normalizedPhone) {
       return res.status(400).json({ message: "Contact is unavailable for retry" });
+    }
+
+    if (contact.optedOut) {
+      return res
+        .status(403)
+        .json({ message: "This contact has opted out and cannot be messaged." });
     }
 
     try {

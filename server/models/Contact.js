@@ -39,6 +39,23 @@ const contactSchema = new mongoose.Schema(
       enum: ["new", "active", "replied", "opted_out", "invalid"],
       default: "new",
     },
+
+    // 🛑 COMPLIANCE / OPT-OUT
+    // Persistent flag independent of `status` (which churns on every reply).
+    // Used to block future sends and drive the manual opt-out toggle.
+    optedOut: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    optedOutAt: {
+      type: Date,
+      default: null,
+    },
+    optedInAt: {
+      type: Date,
+      default: null,
+    },
     source: {
       type: String,
       enum: ["manual", "upload"],

@@ -484,6 +484,8 @@ p.status-success {
    13. Logs specifics
    --------------------------------------------------------- */
 .logs-header, .enrollments-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); }
+.enrollments-header-actions { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.enrollments-header-actions select { width: auto; }
 .logs-header-actions { display: flex; align-items: center; gap: var(--s3); }
 .logs-refreshing { font-size: 12px; color: var(--muted); }
 .logs-toolbar {
