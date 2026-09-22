@@ -39,6 +39,16 @@ function getInitials(name) {
   return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || "?";
 }
 
+// Deterministic per-contact avatar color derived from the name, so each contact
+// gets a stable, distinct hue (white initials stay readable on it).
+function avatarColor(name) {
+  const s = String(name || "");
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return `linear-gradient(135deg, hsl(${hue} 55% 45%), hsl(${(hue + 26) % 360} 60% 34%))`;
+}
+
 function dayLabel(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "";
@@ -87,6 +97,16 @@ export default function InboxPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+
+  // AI reply controls + draft review (Phase 6)
+  const [aiMode, setAiMode] = useState("default");
+  const [takeover, setTakeover] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [draftText, setDraftText] = useState("");
+  const [draftBusy, setDraftBusy] = useState(false);
+  // On ≤1280px the context panel becomes a slide-in drawer.
+  const [showContext, setShowContext] = useState(false);
 
   const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -336,6 +356,119 @@ export default function InboxPage() {
     [enrollment]
   );
 
+  const loadDrafts = useCallback(async (contactId) => {
+    if (!contactId) {
+      setDraft(null);
+      setDraftText("");
+      return;
+    }
+    try {
+      const data = await apiFetch("/ai/drafts?limit=100");
+      const items = Array.isArray(data.items) ? data.items : [];
+      const mine =
+        items.find(
+          (d) => String(d.contactId?._id || d.contactId) === String(contactId)
+        ) || null;
+      setDraft(mine);
+      setDraftText(mine?.result?.text || "");
+    } catch {
+      /* drafts are optional — ignore */
+    }
+  }, []);
+
+  const changeAiMode = useCallback(
+    async (mode) => {
+      if (!active?.contactId) return;
+      try {
+        setAiBusy(true);
+        setError("");
+        await apiFetch(`/ai/contacts/${active.contactId}/ai-mode`, {
+          method: "PATCH",
+          body: JSON.stringify({ aiMode: mode }),
+        });
+        setAiMode(mode);
+      } catch (err) {
+        setError(err.message || "Failed to update AI mode");
+      } finally {
+        setAiBusy(false);
+      }
+    },
+    [active]
+  );
+
+  const claimTakeover = useCallback(async () => {
+    if (!active?.contactId) return;
+    try {
+      setAiBusy(true);
+      setError("");
+      await apiFetch(`/ai/conversations/${active.contactId}/takeover`, {
+        method: "POST",
+      });
+      setTakeover(true);
+    } catch (err) {
+      setError(err.message || "Failed to take over");
+    } finally {
+      setAiBusy(false);
+    }
+  }, [active]);
+
+  const releaseTakeover = useCallback(
+    async (keepAiOff) => {
+      if (!active?.contactId) return;
+      try {
+        setAiBusy(true);
+        setError("");
+        await apiFetch(`/ai/conversations/${active.contactId}/release`, {
+          method: "POST",
+          body: JSON.stringify({ keepAiOff: Boolean(keepAiOff) }),
+        });
+        setTakeover(false);
+        if (keepAiOff) setAiMode("forced_off");
+      } catch (err) {
+        setError(err.message || "Failed to release");
+      } finally {
+        setAiBusy(false);
+      }
+    },
+    [active]
+  );
+
+  const approveDraft = useCallback(async () => {
+    if (!draft?._id) return;
+    try {
+      setDraftBusy(true);
+      setError("");
+      await apiFetch(`/ai/drafts/${draft._id}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ text: draftText.trim() }),
+      });
+      setDraft(null);
+      setDraftText("");
+      if (active?.contactId) {
+        await loadMessages(active.contactId, { silent: true, forceScroll: true });
+      }
+    } catch (err) {
+      setError(err.message || "Failed to send draft");
+    } finally {
+      setDraftBusy(false);
+    }
+  }, [draft, draftText, active, loadMessages]);
+
+  const rejectDraft = useCallback(async () => {
+    if (!draft?._id) return;
+    try {
+      setDraftBusy(true);
+      setError("");
+      await apiFetch(`/ai/drafts/${draft._id}/reject`, { method: "POST" });
+      setDraft(null);
+      setDraftText("");
+    } catch (err) {
+      setError(err.message || "Failed to reject draft");
+    } finally {
+      setDraftBusy(false);
+    }
+  }, [draft]);
+
   const applyTemplate = useCallback(
     (body) => {
       const first = (active?.contact?.fullName || "").split(/\s+/)[0] || "there";
@@ -404,8 +537,11 @@ export default function InboxPage() {
       forceScroll: true,
     });
     loadEnrollment(active.contactId);
+    loadDrafts(active.contactId);
+    setAiMode(active.contact?.aiMode || "default");
+    setTakeover(Boolean(active.humanTakeover?.active));
     markRead(active.contactId);
-  }, [active?.contactId, loadMessages, markRead]);
+  }, [active?.contactId, loadMessages, markRead, loadDrafts]);
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -418,6 +554,7 @@ export default function InboxPage() {
         if (active?.contactId) {
           await loadMessages(active.contactId, { silent: true });
           await loadEnrollment(active.contactId);
+          await loadDrafts(active.contactId);
         }
       } catch (err) {
         console.error("Inbox polling error:", err);
@@ -427,7 +564,7 @@ export default function InboxPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [active?.contactId, loadConversations, loadMessages]);
+  }, [active?.contactId, loadConversations, loadMessages, loadDrafts]);
 
   useEffect(() => {
     if (!shouldScrollToBottomRef.current) return;
@@ -480,7 +617,7 @@ export default function InboxPage() {
 
   return (
     <AppLayout>
-      <div className="inbox">
+      <div className={`inbox ${showContext ? "show-context" : ""}`}>
         <aside className="inbox-sidebar">
           <div className="inbox-sidebar-header">
             <h1>Inbox</h1>
@@ -521,7 +658,10 @@ export default function InboxPage() {
                   className={`conversation ${active?._id === c._id ? "active" : ""} ${unread > 0 ? "is-unread" : ""}`}
                   onClick={() => handleSelect(c)}
                 >
-                  <span className="conv-avatar">
+                  <span
+                    className="conv-avatar"
+                    style={{ background: avatarColor(c.contact?.fullName) }}
+                  >
                     {getInitials(c.contact?.fullName)}
                   </span>
                   <span className="conv-main">
@@ -560,7 +700,10 @@ export default function InboxPage() {
             <>
               <div className="chat-header">
                 <div className="chat-id-group">
-                  <span className="conv-avatar">
+                  <span
+                    className="conv-avatar"
+                    style={{ background: avatarColor(active.contact?.fullName) }}
+                  >
                     {getInitials(active.contact?.fullName)}
                   </span>
                   <div className="chat-header-main">
@@ -573,15 +716,26 @@ export default function InboxPage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="chat-delete-btn"
-                  onClick={handleDeleteConversation}
-                  title="Delete this conversation"
-                >
-                  <Trash2 size={16} />
-                  <span>Delete chat</span>
-                </button>
+                <div className="chat-header-actions">
+                  <button
+                    type="button"
+                    className="ctx-toggle"
+                    onClick={() => setShowContext((v) => !v)}
+                    title="Contact & AI details"
+                    aria-label="Toggle contact & AI details"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-delete-btn"
+                    onClick={handleDeleteConversation}
+                    title="Delete this conversation"
+                  >
+                    <Trash2 size={16} />
+                    <span>Delete chat</span>
+                  </button>
+                </div>
               </div>
 
               {error ? <div className="inbox-error-banner">{error}</div> : null}
@@ -707,6 +861,43 @@ export default function InboxPage() {
                 </div>
               ) : null}
 
+              {draft ? (
+                <div className="ai-draft-bar">
+                  <div className="ai-draft-head">
+                    <span>
+                      🤖 AI {draft.decision === "escalated" ? "escalation" : "draft"} — review before sending
+                    </span>
+                    {typeof draft.result?.confidence === "number" ? (
+                      <span className="ai-draft-conf">
+                        confidence {Math.round(draft.result.confidence * 100)}%
+                      </span>
+                    ) : null}
+                  </div>
+                  <textarea
+                    value={draftText}
+                    onChange={(e) => setDraftText(e.target.value)}
+                    rows={2}
+                  />
+                  <div className="ai-draft-actions">
+                    <button
+                      type="button"
+                      onClick={approveDraft}
+                      disabled={draftBusy || optedOut || !draftText.trim()}
+                    >
+                      {draftBusy ? "Sending..." : "Approve & send"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={rejectDraft}
+                      disabled={draftBusy}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               <form className="chat-input" onSubmit={handleSend}>
                 <textarea
                   value={text}
@@ -750,7 +941,10 @@ export default function InboxPage() {
           {active ? (
             <>
               <div className="ctx-head">
-                <span className="conv-avatar">
+                <span
+                  className="conv-avatar"
+                  style={{ background: avatarColor(active.contact?.fullName) }}
+                >
                   {getInitials(active.contact?.fullName)}
                 </span>
                 <div>
@@ -834,11 +1028,66 @@ export default function InboxPage() {
                   <div className="ctx-empty">No active sequence</div>
                 )}
               </div>
+
+              <div>
+                <div className="ctx-section-label">AI Assistant</div>
+                <div className="ctx-field">
+                  <span className="k">AI mode</span>
+                  <select
+                    value={aiMode}
+                    onChange={(e) => changeAiMode(e.target.value)}
+                    disabled={aiBusy}
+                  >
+                    <option value="default">Default</option>
+                    <option value="forced_on">Always on</option>
+                    <option value="forced_off">Off</option>
+                  </select>
+                </div>
+                <div className="ctx-field">
+                  <span className="k">Human takeover</span>
+                  <span className="v">{takeover ? "Active — AI paused" : "Off"}</span>
+                </div>
+                <div className="ctx-actions">
+                  {takeover ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => releaseTakeover(false)}
+                        disabled={aiBusy}
+                      >
+                        Release to AI
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => releaseTakeover(true)}
+                        disabled={aiBusy}
+                      >
+                        Keep AI off
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={claimTakeover}
+                      disabled={aiBusy}
+                    >
+                      Take over
+                    </button>
+                  )}
+                </div>
+              </div>
             </>
           ) : (
             <div className="ctx-empty">Select a conversation to see contact details.</div>
           )}
         </aside>
+
+        <div
+          className="ctx-scrim"
+          onClick={() => setShowContext(false)}
+          aria-hidden="true"
+        />
       </div>
     </AppLayout>
   );

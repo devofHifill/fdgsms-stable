@@ -235,7 +235,45 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--primary)
 .field-block { display: flex; flex-direction: column; gap: 7px; }
 .field-block > span { font-size: 12.5px; font-weight: 600; color: var(--text); }
 .checkbox-row { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+
+/* Toggle switch — an accessible checkbox styled as an on/off switch. */
+.switch-row { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+.switch-input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.switch {
+  position: relative; flex: none; width: 40px; height: 22px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  transition: background 0.15s, border-color 0.15s;
+}
+.switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--muted); transition: transform 0.15s, background 0.15s;
+}
+.switch-input:checked + .switch { background: var(--primary); border-color: var(--primary); }
+.switch-input:checked + .switch::after { transform: translateX(18px); background: #fff; }
+.switch-input:focus-visible + .switch { box-shadow: var(--ring); }
+.switch-input:disabled + .switch { opacity: 0.55; cursor: not-allowed; }
+
 .form-actions { display: flex; justify-content: flex-end; gap: var(--s3); margin-top: var(--s2); }
+.btn-secondary {
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface-2); color: var(--muted); cursor: pointer; font: inherit; font-size: 13px;
+  align-self: start;
+}
+.btn-secondary:hover { background: var(--hover); color: var(--text); }
+
+/* AI draft review bar (Inbox) */
+.ai-draft-bar {
+  margin: 0 var(--s5) var(--s3); padding: var(--s3) var(--s4);
+  border: 1px solid var(--primary); border-radius: var(--r); background: var(--primary-tint);
+}
+.ai-draft-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 12.5px; font-weight: 700; color: var(--primary); margin-bottom: var(--s2);
+}
+.ai-draft-conf { font-weight: 600; color: var(--muted); }
+.ai-draft-actions { display: flex; gap: var(--s3); margin-top: var(--s2); }
+/* Keep the AI-mode select compact inside the context field row */
+.ctx-field select { width: auto; }
 
 /* ---------------------------------------------------------
    6. Buttons
@@ -255,12 +293,14 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--primary)
 
 /* primary emphasis: form submits + login */
 .chat-panel button[type="submit"],
+.chat-panel button.btn-primary,
 .login-card button {
   background: linear-gradient(180deg, var(--primary), var(--primary-600));
   border-color: transparent; color: #fff;
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
 }
 .chat-panel button[type="submit"]:hover,
+.chat-panel button.btn-primary:hover,
 .login-card button:hover {
   background: linear-gradient(180deg, var(--primary), var(--primary-600));
   border-color: transparent; box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
@@ -602,6 +642,16 @@ p.status-success {
 
 /* Phase 5: enrollment controls */
 .ctx-actions { display: flex; gap: 8px; margin-top: var(--s3); flex-wrap: wrap; }
+
+/* Context-panel drawer toggle (shown only when the panel is off-canvas ≤1280px) */
+.chat-header-actions { display: flex; align-items: center; gap: 8px; }
+.ctx-toggle {
+  display: none; width: 34px; height: 34px; place-items: center;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface-2); color: var(--muted); cursor: pointer;
+}
+.ctx-toggle:hover { background: var(--hover); color: var(--text); }
+.ctx-scrim { display: none; }
 .ctx-actions button {
   padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
   border: 1px solid var(--border); border-radius: var(--r-sm);
@@ -689,13 +739,34 @@ p.status-success {
 .bubble-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 10.5px; opacity: 0.82; }
 .bubble.inbound .bubble-meta { color: var(--muted); }
 .bubble-delete-btn {
-  position: absolute; top: 5px; right: 5px; width: 22px; height: 22px;
-  display: inline-grid; place-items: center; border: none; border-radius: 6px;
-  background: rgba(0, 0, 0, 0.28); color: #fff; cursor: pointer; opacity: 0;
-  transition: opacity 0.14s, background 0.14s;
+  position: absolute !important;
+  top: 5px !important;
+  right: 5px !important;
+  width: 24px !important;
+  height: 24px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border: none !important;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45) !important;
+  color: #fff !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  transition: opacity 0.14s, background 0.14s, transform 0.05s !important;
 }
-.bubble:hover .bubble-delete-btn { opacity: 1; }
-.bubble-delete-btn:hover { background: var(--danger); }
+
+.bubble:hover .bubble-delete-btn {
+  opacity: 1 !important;
+}
+
+.bubble-delete-btn:hover {
+  background: var(--danger) !important;
+  color: #fff !important;
+}
+
+.bubble-delete-btn:active {
+  transform: scale(0.92) !important;
+}
 
 .chat-input { display: grid; grid-template-columns: 1fr auto; gap: var(--s3); padding: var(--s4) var(--s5); border-top: 1px solid var(--border); background: var(--surface); }
 .chat-input textarea {
@@ -822,6 +893,7 @@ a.list-row + a.list-row { margin-top: var(--s2); }
   background: var(--surface-2); transition: border-color 0.14s, background 0.14s;
 }
 .dropzone:hover { border-color: var(--primary); background: var(--hover); }
+.dropzone.dragging { border-color: var(--primary); background: var(--primary-tint); }
 .dropzone .dz-ico { width: 46px; height: 46px; margin: 0 auto var(--s3); border-radius: var(--r); display: grid; place-items: center; background: var(--primary-tint); color: var(--primary); }
 .dropzone .dz-title { font-weight: 600; }
 .dropzone .dz-sub { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
@@ -851,7 +923,17 @@ a.list-row + a.list-row { margin-top: var(--s2); }
    --------------------------------------------------------- */
 @media (max-width: 1280px) {
   .inbox { grid-template-columns: 340px minmax(0, 1fr); }
-  .inbox-context { display: none; }
+  /* Context panel (contact + automation + AI controls) becomes a right drawer. */
+  .inbox-context {
+    position: fixed; top: 0; right: 0; height: 100vh; width: min(360px, 90vw);
+    transform: translateX(100%); transition: transform 0.22s ease;
+    box-shadow: var(--shadow-lg); z-index: 45;
+  }
+  .inbox.show-context .inbox-context { transform: translateX(0); }
+  .inbox.show-context .ctx-scrim {
+    display: block; position: fixed; inset: 0; z-index: 44; background: rgba(0, 0, 0, 0.5);
+  }
+  .ctx-toggle { display: inline-grid; }
 }
 
 @media (max-width: 1100px) {
@@ -898,4 +980,44 @@ a.list-row + a.list-row { margin-top: var(--s2); }
 @media (max-width: 560px) {
   .enrollment-stats, .logs-stats, .stats { grid-template-columns: 1fr; }
   .bubble, .message-bubble { max-width: 86%; }
+}
+
+/* ---------------------------------------------------------
+   18. AI Analytics (Phase 7)
+   --------------------------------------------------------- */
+.ai-metrics {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--s4); margin-bottom: var(--s6);
+}
+.ai-metric {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: var(--s4) var(--s4) var(--s3);
+}
+.ai-metric .n { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+.ai-metric .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.ai-test-result { margin-top: var(--s4); border-top: 1px solid var(--border); padding-top: var(--s4); }
+.ai-test-reply {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r);
+  padding: var(--s3) var(--s4); white-space: pre-wrap; line-height: 1.5;
+}
+.ai-test-meta { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s3); }
+
+.ai-audit { display: flex; flex-direction: column; }
+.ai-audit-row {
+  display: grid; grid-template-columns: 10px 170px 1fr auto; gap: var(--s3);
+  align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.ai-audit-row:last-child { border-bottom: none; }
+.ai-audit-event { font-weight: 600; color: var(--primary); font-size: 12px; }
+.ai-audit-msg { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-audit-when { color: var(--dim); font-size: 11.5px; white-space: nowrap; }
+.audit-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.audit-dot.is-info { background: var(--info); }
+.audit-dot.is-warn { background: var(--warn); }
+.audit-dot.is-error { background: var(--danger); }
+
+@media (max-width: 767px) {
+  .ai-audit-row { grid-template-columns: 10px 1fr; row-gap: 2px; }
+  .ai-audit-when { display: none; }
 }

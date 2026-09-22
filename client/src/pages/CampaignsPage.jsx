@@ -181,7 +181,7 @@ export default function CampaignsPage() {
         body: JSON.stringify({ isActive: !campaign.isActive }),
       });
 
-      setSuccess(campaign.isActive ? "Campaign paused" : "Campaign activated");
+      setSuccess(campaign.isActive ? "Campaign paused" : "Campaign resumed");
       await loadCampaigns();
     } catch (err) {
       setError(err.message || "Failed to update campaign");
@@ -437,7 +437,7 @@ export default function CampaignsPage() {
                                 campaign.isActive ? "badge-green" : "badge-orange"
                               }
                             >
-                              {campaign.isActive ? "Active" : "Inactive"}
+                              {campaign.isActive ? "Active" : "Paused"}
                             </span>
                           </p>
                         </div>
@@ -500,7 +500,7 @@ export default function CampaignsPage() {
                           onClick={() => toggleActive(campaign)}
                           disabled={busyId === campaign._id}
                         >
-                          {campaign.isActive ? "Pause" : "Activate"}
+                          {campaign.isActive ? "Pause" : "Resume"}
                         </button>
                         <button
                           type="button"

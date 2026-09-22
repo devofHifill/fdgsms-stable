@@ -47,6 +47,7 @@ export async function getConversations(req, res) {
               status: contact.status,
               normalizedPhone: contact.normalizedPhone,
               lineType: contact.lineTypeNormalized || contact.lineTypeRaw || "",
+              aiMode: contact.aiMode || "default",
             }
           : null,
       };

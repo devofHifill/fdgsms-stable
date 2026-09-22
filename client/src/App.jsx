@@ -6,6 +6,8 @@ import ContactsPage from "./pages/ContactsPage";
 import CampaignsPage from "./pages/CampaignsPage";
 import EnrollmentsPage from "./pages/EnrollmentsPage";
 import SettingsPage from "./pages/SettingsPage";
+import AiSettingsPage from "./pages/AiSettingsPage";
+import AiAnalyticsPage from "./pages/AiAnalyticsPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import InboxPage from "./pages/InboxPage";
 import LogsPage from "./pages/LogsPage";
@@ -82,6 +84,24 @@ export default function App() {
         element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/ai-settings"
+        element={
+          <ProtectedRoute>
+            <AiSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/ai-analytics"
+        element={
+          <ProtectedRoute>
+            <AiAnalyticsPage />
           </ProtectedRoute>
         }
       />
