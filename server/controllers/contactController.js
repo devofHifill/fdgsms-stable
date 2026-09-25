@@ -13,6 +13,7 @@
 // This powers the Contacts page where you browse, search, and inspect contacts.
 
 
+import mongoose from "mongoose";
 import Contact from "../models/Contact.js";
 
 function escapeRegex(value = "") {
@@ -75,6 +76,56 @@ export async function getContacts(req, res) {
     return res.status(500).json({
       message: "Failed to fetch contacts",
     });
+  }
+}
+
+// Add, remove, or replace tags on multiple contacts at once (bulk select in the inbox).
+export async function bulkUpdateTags(req, res) {
+  try {
+    const { contactIds, tags, mode = "add" } = req.body || {};
+
+    if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ message: "contactIds is required" });
+    }
+
+    if (!Array.isArray(tags) || tags.length === 0) {
+      return res.status(400).json({ message: "tags is required" });
+    }
+
+    const validIds = contactIds.filter((id) => mongoose.isValidObjectId(id));
+    const cleanTags = [
+      ...new Set(tags.map((t) => String(t).trim()).filter(Boolean)),
+    ];
+
+    if (!validIds.length) {
+      return res.status(400).json({ message: "No valid contact ids provided" });
+    }
+
+    if (!cleanTags.length) {
+      return res.status(400).json({ message: "No valid tags provided" });
+    }
+
+    let update;
+    if (mode === "remove") {
+      update = { $pull: { tags: { $in: cleanTags } } };
+    } else if (mode === "set") {
+      update = { $set: { tags: cleanTags } };
+    } else {
+      update = { $addToSet: { tags: { $each: cleanTags } } };
+    }
+
+    const result = await Contact.updateMany(
+      { _id: { $in: validIds } },
+      update
+    );
+
+    return res.json({
+      message: "Tags updated",
+      modified: result.modifiedCount || 0,
+    });
+  } catch (error) {
+    console.error("bulkUpdateTags error:", error);
+    res.status(500).json({ message: "Failed to update tags" });
   }
 }
 

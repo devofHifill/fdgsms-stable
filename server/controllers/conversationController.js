@@ -48,6 +48,7 @@ export async function getConversations(req, res) {
               normalizedPhone: contact.normalizedPhone,
               lineType: contact.lineTypeNormalized || contact.lineTypeRaw || "",
               aiMode: contact.aiMode || "default",
+              tags: contact.tags || [],
             }
           : null,
       };
@@ -149,6 +150,69 @@ export async function deleteMessage(req, res) {
   } catch (error) {
     console.error("deleteMessage error:", error);
     res.status(500).json({ message: "Failed to delete message" });
+  }
+}
+
+// Mark multiple conversations read or unread at once (bulk select in the inbox).
+export async function bulkMarkRead(req, res) {
+  try {
+    const { contactIds, read } = req.body || {};
+
+    if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ message: "contactIds is required" });
+    }
+
+    const validIds = contactIds.filter((id) => mongoose.isValidObjectId(id));
+
+    if (!validIds.length) {
+      return res.status(400).json({ message: "No valid contact ids provided" });
+    }
+
+    const unreadCount = read === false ? 1 : 0;
+
+    const result = await Conversation.updateMany(
+      { contactId: { $in: validIds } },
+      { $set: { unreadCount } }
+    );
+
+    return res.json({
+      message: "Conversations updated",
+      modified: result.modifiedCount || 0,
+    });
+  } catch (error) {
+    console.error("bulkMarkRead error:", error);
+    res.status(500).json({ message: "Failed to update conversations" });
+  }
+}
+
+// Delete multiple conversation threads at once (bulk select in the inbox).
+export async function bulkDeleteConversations(req, res) {
+  try {
+    const { contactIds } = req.body || {};
+
+    if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ message: "contactIds is required" });
+    }
+
+    const validIds = contactIds.filter((id) => mongoose.isValidObjectId(id));
+
+    if (!validIds.length) {
+      return res.status(400).json({ message: "No valid contact ids provided" });
+    }
+
+    const [messageResult, conversationResult] = await Promise.all([
+      SMSMessage.deleteMany({ contactId: { $in: validIds } }),
+      Conversation.deleteMany({ contactId: { $in: validIds } }),
+    ]);
+
+    return res.json({
+      message: "Conversations deleted",
+      deletedMessages: messageResult.deletedCount || 0,
+      deletedConversations: conversationResult.deletedCount || 0,
+    });
+  } catch (error) {
+    console.error("bulkDeleteConversations error:", error);
+    res.status(500).json({ message: "Failed to delete conversations" });
   }
 }
 
