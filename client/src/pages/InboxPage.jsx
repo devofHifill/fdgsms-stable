@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, MailOpen, Mail, Tag, Download } from "lucide-react";
 import { apiFetch } from "../services/api";
 import AppLayout from "../components/AppLayout";
 
@@ -71,6 +71,11 @@ function smsInfo(text) {
 
 const FAILED_STATUSES = ["failed", "undelivered"];
 
+function toCsvValue(value) {
+  const s = String(value ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 const FILTERS = [
   { key: "all", label: "All" },
   { key: "unread", label: "Unread" },
@@ -88,6 +93,10 @@ export default function InboxPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [showJump, setShowJump] = useState(false);
+
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const [templates, setTemplates] = useState([]);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -319,6 +328,151 @@ export default function InboxPage() {
       setError(err.message || "Failed to delete conversation");
     }
   }, [active, loadConversations]);
+
+  const toggleSelect = useCallback((contactId, e) => {
+    e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(contactId)) next.delete(contactId);
+      else next.add(contactId);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const handleBulkDelete = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    if (
+      !window.confirm(
+        `Delete ${ids.length} conversation${ids.length === 1 ? "" : "s"}? This removes all their messages and cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setBulkDeleting(true);
+      setError("");
+      await apiFetch("/conversations/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ contactIds: ids }),
+      });
+
+      if (active?.contactId && ids.includes(active.contactId)) {
+        setActive(null);
+        setMessages([]);
+        setEnrollment(null);
+      }
+
+      setSelectedIds(new Set());
+      await loadConversations();
+    } catch (err) {
+      setError(err.message || "Failed to delete conversations");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [selectedIds, active, loadConversations]);
+
+  const handleBulkMarkRead = useCallback(
+    async (read) => {
+      const ids = Array.from(selectedIds);
+      if (!ids.length) return;
+
+      try {
+        setBulkBusy(true);
+        setError("");
+        await apiFetch("/conversations/bulk-read", {
+          method: "POST",
+          body: JSON.stringify({ contactIds: ids, read }),
+        });
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            ids.includes(c.contactId)
+              ? { ...c, unreadCount: read ? 0 : Math.max(c.unreadCount || 0, 1) }
+              : c
+          )
+        );
+      } catch (err) {
+        setError(err.message || "Failed to update conversations");
+      } finally {
+        setBulkBusy(false);
+      }
+    },
+    [selectedIds]
+  );
+
+  const handleBulkTag = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+
+    const raw = window.prompt("Add tag(s) to the selected contacts, comma-separated:");
+    if (!raw || !raw.trim()) return;
+
+    const tags = [...new Set(raw.split(",").map((t) => t.trim()).filter(Boolean))];
+    if (!tags.length) return;
+
+    try {
+      setBulkBusy(true);
+      setError("");
+      await apiFetch("/contacts/bulk-tags", {
+        method: "PATCH",
+        body: JSON.stringify({ contactIds: ids, tags, mode: "add" }),
+      });
+      await loadConversations();
+    } catch (err) {
+      setError(err.message || "Failed to tag contacts");
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedIds, loadConversations]);
+
+  const handleExportCsv = useCallback(() => {
+    const ids = selectedIds;
+    const rows = conversations.filter((c) => ids.has(c.contactId));
+    if (!rows.length) return;
+
+    const header = [
+      "Name",
+      "Phone",
+      "Email",
+      "Status",
+      "Line type",
+      "Tags",
+      "Last message",
+      "Last message at",
+    ];
+    const lines = [header.map(toCsvValue).join(",")];
+
+    for (const c of rows) {
+      lines.push(
+        [
+          c.contact?.fullName || "",
+          c.contact?.normalizedPhone || c.contact?.phone || "",
+          c.contact?.email || "",
+          c.contact?.status || "",
+          c.contact?.lineType || "",
+          (c.contact?.tags || []).join("; "),
+          c.lastMessage || "",
+          c.lastMessageAt ? new Date(c.lastMessageAt).toISOString() : "",
+        ]
+          .map(toCsvValue)
+          .join(",")
+      );
+    }
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `conversations-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [selectedIds, conversations]);
 
   const handleRetry = useCallback(async (messageId) => {
     try {
@@ -597,6 +751,13 @@ export default function InboxPage() {
     });
   }, [conversations, search, filter]);
 
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === visibleConversations.length) return new Set();
+      return new Set(visibleConversations.map((c) => c.contactId));
+    });
+  }, [visibleConversations]);
+
   // Decorate messages with day separators.
   const messageItems = useMemo(() => {
     const out = [];
@@ -644,6 +805,72 @@ export default function InboxPage() {
                 </button>
               ))}
             </div>
+
+            {selectedIds.size > 0 ? (
+              <div className="inbox-bulk-bar">
+                <label className="inbox-bulk-selectall">
+                  <input
+                    type="checkbox"
+                    checked={
+                      visibleConversations.length > 0 &&
+                      selectedIds.size === visibleConversations.length
+                    }
+                    onChange={toggleSelectAll}
+                  />
+                  {selectedIds.size} selected
+                </label>
+                <div className="inbox-bulk-actions">
+                  <button type="button" onClick={clearSelection} disabled={bulkDeleting || bulkBusy}>
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkMarkRead(true)}
+                    disabled={bulkDeleting || bulkBusy}
+                    title="Mark selected as read"
+                  >
+                    <MailOpen size={14} />
+                    Read
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkMarkRead(false)}
+                    disabled={bulkDeleting || bulkBusy}
+                    title="Mark selected as unread"
+                  >
+                    <Mail size={14} />
+                    Unread
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkTag}
+                    disabled={bulkDeleting || bulkBusy}
+                    title="Tag selected contacts"
+                  >
+                    <Tag size={14} />
+                    Tag
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    disabled={bulkDeleting || bulkBusy}
+                    title="Export selected as CSV"
+                  >
+                    <Download size={14} />
+                    Export
+                  </button>
+                  <button
+                    type="button"
+                    className="inbox-bulk-delete"
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting || bulkBusy}
+                  >
+                    <Trash2 size={14} />
+                    {bulkDeleting ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {loadingConversations ? (
@@ -655,9 +882,21 @@ export default function InboxPage() {
                 <button
                   key={c._id}
                   type="button"
-                  className={`conversation ${active?._id === c._id ? "active" : ""} ${unread > 0 ? "is-unread" : ""}`}
+                  className={`conversation ${active?._id === c._id ? "active" : ""} ${unread > 0 ? "is-unread" : ""} ${selectedIds.has(c.contactId) ? "is-selected" : ""}`}
                   onClick={() => handleSelect(c)}
                 >
+                  <span
+                    className="conv-checkbox"
+                    onClick={(e) => toggleSelect(c.contactId, e)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(c.contactId)}
+                      onChange={(e) => toggleSelect(c.contactId, e)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select ${c.contact?.fullName || "conversation"}`}
+                    />
+                  </span>
                   <span
                     className="conv-avatar"
                     style={{ background: avatarColor(c.contact?.fullName) }}
@@ -684,6 +923,15 @@ export default function InboxPage() {
                     <span className="conv-preview">
                       {c.lastMessage || "No messages yet"}
                     </span>
+                    {c.contact?.tags?.length ? (
+                      <span className="conv-tags">
+                        {c.contact.tags.map((t) => (
+                          <span key={t} className="conv-tag">
+                            {t}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               );

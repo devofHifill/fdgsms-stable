@@ -709,6 +709,36 @@ p.status-success {
 .conv-time { font-size: 11px; color: var(--muted); flex-shrink: 0; }
 .conv-preview { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Bulk-select checkboxes */
+.conv-checkbox { display: flex; align-items: center; flex-shrink: 0; padding-right: 2px; }
+.conv-checkbox input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); }
+.conversation.is-selected { background: var(--primary-tint); }
+
+.inbox-bulk-bar {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: var(--s3); padding: 8px 10px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.inbox-bulk-selectall { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--text); cursor: pointer; }
+.inbox-bulk-selectall input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--primary); }
+.inbox-bulk-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.inbox-bulk-actions button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+  border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.inbox-bulk-actions button:hover { background: var(--hover); }
+.inbox-bulk-actions button:disabled { opacity: 0.55; cursor: not-allowed; }
+.inbox-bulk-delete { color: #fff !important; background: var(--danger) !important; border-color: var(--danger) !important; }
+.inbox-bulk-delete:hover { filter: brightness(1.08); }
+
+/* Contact tag chips in the conversation row */
+.conv-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.conv-tag {
+  font-size: 10.5px; font-weight: 700; padding: 1px 8px; border-radius: var(--r-pill);
+  background: var(--primary-tint); color: var(--primary); text-transform: uppercase; letter-spacing: 0.02em;
+}
+
 .inbox-chat { display: flex; flex-direction: column; min-width: 0; height: 100vh; background: var(--bg); }
 .chat-header { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s4) var(--s5); border-bottom: 1px solid var(--border); background: var(--surface); }
 .chat-header-main { display: grid; gap: 3px; min-width: 0; }
