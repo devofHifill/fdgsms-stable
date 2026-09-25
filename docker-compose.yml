@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mongodb:
     image: mongo:7
@@ -8,8 +6,8 @@ services:
     ports:
       - "127.0.0.1:27018:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: FDGadmin
-      MONGO_INITDB_ROOT_PASSWORD: fdgmongo123
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?set MONGO_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?set MONGO_PASSWORD in .env}
     volumes:
       - mongo_data:/data/db
     networks:
@@ -23,14 +21,21 @@ services:
       - "5000:4000"
     environment:
       PORT: 4000
-      MONGO_URI: mongodb://FDGadmin:fdgmongo123@mongodb:27017/fdgsms?authSource=admin
-      CLIENT_URL: https://fdgsms.filldesigngroup.cloud
+      MONGO_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/${MONGO_DB:-fdgsms}?authSource=admin
+      CLIENT_URL: https://${APP_DOMAIN:?set APP_DOMAIN in .env}
 
-      JWT_SECRET: gzzpzcMqX7MQMHbO608OjlofodDWiA4FimRMcHMQKM2
-      JWT_EXPIRES_IN: 7d
-      ADMIN_EMAIL: dev.filldesigngroup@gmail.com
-      ADMIN_PASSWORD: Testnet1@23!
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
 
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
+
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_SECRET_KEY: ${AI_SECRET_KEY:-}
 
     depends_on:
       - mongodb
@@ -40,7 +45,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=n8n_default"
-      - "traefik.http.routers.fdgsms-api.rule=Host(`fdgsms.filldesigngroup.cloud`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.fdgsms-api.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.fdgsms-api.entrypoints=web,websecure"
       - "traefik.http.routers.fdgsms-api.tls=true"
       - "traefik.http.routers.fdgsms-api.tls.certresolver=mytlschallenge"
@@ -64,7 +69,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=n8n_default"
-      - "traefik.http.routers.fdgsms.rule=Host(`fdgsms.filldesigngroup.cloud`)"
+      - "traefik.http.routers.fdgsms.rule=Host(`${APP_DOMAIN}`)"
       - "traefik.http.routers.fdgsms.entrypoints=web,websecure"
       - "traefik.http.routers.fdgsms.tls=true"
       - "traefik.http.routers.fdgsms.tls.certresolver=mytlschallenge"
