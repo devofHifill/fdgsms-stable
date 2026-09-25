@@ -7,6 +7,8 @@ import {
   markConversationRead,
   deleteMessage,
   deleteConversation,
+  bulkDeleteConversations,
+  bulkMarkRead,
 } from "../controllers/conversationController.js";
 
 const router = express.Router();
@@ -21,6 +23,12 @@ router.post("/:contactId/read", requireAuth, markConversationRead);
 
 // Delete a single message (specific literal route declared before the param route).
 router.delete("/messages/:messageId", requireAuth, deleteMessage);
+
+// Bulk-delete conversations (specific literal route declared before the param route).
+router.post("/bulk-delete", requireAuth, bulkDeleteConversations);
+
+// Bulk mark conversations read/unread (specific literal route declared before the param route).
+router.post("/bulk-read", requireAuth, bulkMarkRead);
 
 // Delete an entire conversation thread for a contact.
 router.delete("/:contactId", requireAuth, deleteConversation);
