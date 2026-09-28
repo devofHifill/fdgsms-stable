@@ -9,6 +9,7 @@ import {
   deleteConversation,
   bulkDeleteConversations,
   bulkMarkRead,
+  exportConversationsCsv,
 } from "../controllers/conversationController.js";
 
 const router = express.Router();
@@ -29,6 +30,9 @@ router.post("/bulk-delete", requireAuth, bulkDeleteConversations);
 
 // Bulk mark conversations read/unread (specific literal route declared before the param route).
 router.post("/bulk-read", requireAuth, bulkMarkRead);
+
+// Export selected conversations as CSV (specific literal route declared before the param route).
+router.post("/bulk-export", requireAuth, exportConversationsCsv);
 
 // Delete an entire conversation thread for a contact.
 router.delete("/:contactId", requireAuth, deleteConversation);
