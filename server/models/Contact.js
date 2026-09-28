@@ -32,7 +32,7 @@ const contactSchema = new mongoose.Schema(
       type: String,
       trim: true,
       required: true,
-      index: true,
+      // Indexed below as unique — declaring it here too makes Mongoose warn.
     },
     status: {
       type: String,
@@ -135,7 +135,7 @@ const contactSchema = new mongoose.Schema(
 );
 
 // INDEXES
+// lineTypeStatus is indexed on the field above; only declare each index once.
 contactSchema.index({ normalizedPhone: 1 }, { unique: true });
-contactSchema.index({ lineTypeStatus: 1 });
 
 export default mongoose.model("Contact", contactSchema);
