@@ -71,11 +71,6 @@ function smsInfo(text) {
 
 const FAILED_STATUSES = ["failed", "undelivered"];
 
-function toCsvValue(value) {
-  const s = String(value ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 const FILTERS = [
   { key: "all", label: "All" },
   { key: "unread", label: "Unread" },
@@ -97,6 +92,7 @@ export default function InboxPage() {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const [templates, setTemplates] = useState([]);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -429,50 +425,38 @@ export default function InboxPage() {
     }
   }, [selectedIds, loadConversations]);
 
-  const handleExportCsv = useCallback(() => {
-    const ids = selectedIds;
-    const rows = conversations.filter((c) => ids.has(c.contactId));
-    if (!rows.length) return;
+  // The CSV carries each contact's whole transcript, which only the server
+  // holds, so it is built there and downloaded from the response.
+  const handleExportCsv = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
 
-    const header = [
-      "Name",
-      "Phone",
-      "Email",
-      "Status",
-      "Line type",
-      "Tags",
-      "Last message",
-      "Last message at",
-    ];
-    const lines = [header.map(toCsvValue).join(",")];
+    try {
+      setExporting(true);
+      setError("");
+      const data = await apiFetch("/conversations/bulk-export", {
+        method: "POST",
+        body: JSON.stringify({ contactIds: ids }),
+      });
 
-    for (const c of rows) {
-      lines.push(
-        [
-          c.contact?.fullName || "",
-          c.contact?.normalizedPhone || c.contact?.phone || "",
-          c.contact?.email || "",
-          c.contact?.status || "",
-          c.contact?.lineType || "",
-          (c.contact?.tags || []).join("; "),
-          c.lastMessage || "",
-          c.lastMessageAt ? new Date(c.lastMessageAt).toISOString() : "",
-        ]
-          .map(toCsvValue)
-          .join(",")
-      );
+      // BOM so Excel opens the file as UTF-8 rather than guessing.
+      const blob = new Blob(["﻿", data.csv || ""], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `conversations-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || "Failed to export conversations");
+    } finally {
+      setExporting(false);
     }
-
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `conversations-export-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }, [selectedIds, conversations]);
+  }, [selectedIds]);
 
   const handleRetry = useCallback(async (messageId) => {
     try {
@@ -820,13 +804,13 @@ export default function InboxPage() {
                   {selectedIds.size} selected
                 </label>
                 <div className="inbox-bulk-actions">
-                  <button type="button" onClick={clearSelection} disabled={bulkDeleting || bulkBusy}>
+                  <button type="button" onClick={clearSelection} disabled={bulkDeleting || bulkBusy || exporting}>
                     Clear
                   </button>
                   <button
                     type="button"
                     onClick={() => handleBulkMarkRead(true)}
-                    disabled={bulkDeleting || bulkBusy}
+                    disabled={bulkDeleting || bulkBusy || exporting}
                     title="Mark selected as read"
                   >
                     <MailOpen size={14} />
@@ -835,7 +819,7 @@ export default function InboxPage() {
                   <button
                     type="button"
                     onClick={() => handleBulkMarkRead(false)}
-                    disabled={bulkDeleting || bulkBusy}
+                    disabled={bulkDeleting || bulkBusy || exporting}
                     title="Mark selected as unread"
                   >
                     <Mail size={14} />
@@ -844,7 +828,7 @@ export default function InboxPage() {
                   <button
                     type="button"
                     onClick={handleBulkTag}
-                    disabled={bulkDeleting || bulkBusy}
+                    disabled={bulkDeleting || bulkBusy || exporting}
                     title="Tag selected contacts"
                   >
                     <Tag size={14} />
@@ -853,17 +837,17 @@ export default function InboxPage() {
                   <button
                     type="button"
                     onClick={handleExportCsv}
-                    disabled={bulkDeleting || bulkBusy}
-                    title="Export selected as CSV"
+                    disabled={bulkDeleting || bulkBusy || exporting}
+                    title="Export selected as CSV, with full conversations"
                   >
                     <Download size={14} />
-                    Export
+                    {exporting ? "Exporting..." : "Export"}
                   </button>
                   <button
                     type="button"
                     className="inbox-bulk-delete"
                     onClick={handleBulkDelete}
-                    disabled={bulkDeleting || bulkBusy}
+                    disabled={bulkDeleting || bulkBusy || exporting}
                   >
                     <Trash2 size={14} />
                     {bulkDeleting ? "Deleting..." : "Delete"}
