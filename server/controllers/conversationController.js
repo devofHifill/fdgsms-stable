@@ -244,3 +244,120 @@ export async function deleteConversation(req, res) {
     res.status(500).json({ message: "Failed to delete conversation" });
   }
 }
+// CSV EXPORT (bulk select in the inbox)
+//
+// The browser only holds each conversation's last message, so the full
+// transcript is assembled here and handed back as a ready-made CSV string.
+
+function toCsvValue(value) {
+  const text = value == null ? "" : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+// "2026-09-28 14:03" in the server's local time.
+function formatTimestamp(date) {
+  if (!date) return "";
+  const d = new Date(date);
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
+
+function speakerLabel(message) {
+  if (message.direction === "inbound") return "Them";
+  return ["failed", "undelivered"].includes(message.status)
+    ? "Us (failed)"
+    : "Us";
+}
+
+export async function exportConversationsCsv(req, res) {
+  try {
+    const { contactIds } = req.body || {};
+
+    if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ message: "contactIds is required" });
+    }
+
+    const validIds = contactIds.filter((id) => mongoose.isValidObjectId(id));
+
+    if (!validIds.length) {
+      return res.status(400).json({ message: "No valid contact ids provided" });
+    }
+
+    const [contacts, conversations, messages] = await Promise.all([
+      Contact.find({ _id: { $in: validIds } }).lean(),
+      Conversation.find({ contactId: { $in: validIds } }).lean(),
+      // Every stored message was already handed to the provider, so the
+      // transcript keeps all of them whatever status they carry.
+      SMSMessage.find({ contactId: { $in: validIds } })
+        .sort({ createdAt: 1 })
+        .lean(),
+    ]);
+
+    const conversationMap = new Map(
+      conversations.map((c) => [String(c.contactId), c])
+    );
+
+    // Oldest message first, so each transcript reads top to bottom.
+    const threads = new Map();
+    for (const message of messages) {
+      const key = String(message.contactId);
+      const line = `${formatTimestamp(message.createdAt)} | ${speakerLabel(
+        message
+      )}: ${message.body || ""}`;
+      threads.set(key, threads.has(key) ? `${threads.get(key)}\n${line}` : line);
+    }
+
+    // Same order as the inbox: most recent activity first.
+    const rows = contacts.sort((a, b) => {
+      const aAt = conversationMap.get(String(a._id))?.lastMessageAt || 0;
+      const bAt = conversationMap.get(String(b._id))?.lastMessageAt || 0;
+      return new Date(bAt) - new Date(aAt);
+    });
+
+    const header = [
+      "Name",
+      "Phone",
+      "Email",
+      "Status",
+      "Line type",
+      "Tags",
+      "Full conversation",
+      "Last message at",
+    ];
+
+    const lines = [header.map(toCsvValue).join(",")];
+
+    for (const contact of rows) {
+      const conversation = conversationMap.get(String(contact._id));
+
+      lines.push(
+        [
+          contact.fullName || "",
+          contact.normalizedPhone || contact.phone || "",
+          contact.email || "",
+          contact.status || "",
+          contact.lineTypeNormalized || contact.lineTypeRaw || "",
+          (contact.tags || []).join("; "),
+          threads.get(String(contact._id)) || "",
+          conversation?.lastMessageAt
+            ? new Date(conversation.lastMessageAt).toISOString()
+            : "",
+        ]
+          .map(toCsvValue)
+          .join(",")
+      );
+    }
+
+    return res.json({
+      csv: lines.join("\n"),
+      contacts: rows.length,
+      messages: messages.length,
+    });
+  } catch (error) {
+    console.error("exportConversationsCsv error:", error);
+    res.status(500).json({ message: "Failed to export conversations" });
+  }
+}
