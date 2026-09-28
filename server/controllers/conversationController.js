@@ -249,10 +249,6 @@ export async function deleteConversation(req, res) {
 // The browser only holds each conversation's last message, so the full
 // transcript is assembled here and handed back as a ready-made CSV string.
 
-// Outbound messages that never left the queue are not part of the
-// conversation yet, so they stay out of the transcript.
-const UNSENT_STATUSES = ["queued", "accepted", "sending"];
-
 function toCsvValue(value) {
   const text = value == null ? "" : String(value);
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -293,10 +289,9 @@ export async function exportConversationsCsv(req, res) {
     const [contacts, conversations, messages] = await Promise.all([
       Contact.find({ _id: { $in: validIds } }).lean(),
       Conversation.find({ contactId: { $in: validIds } }).lean(),
-      SMSMessage.find({
-        contactId: { $in: validIds },
-        status: { $nin: UNSENT_STATUSES },
-      })
+      // Every stored message was already handed to the provider, so the
+      // transcript keeps all of them whatever status they carry.
+      SMSMessage.find({ contactId: { $in: validIds } })
         .sort({ createdAt: 1 })
         .lean(),
     ]);
