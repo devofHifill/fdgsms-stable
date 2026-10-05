@@ -12,6 +12,32 @@ const STATUS_OPTIONS = [
 ];
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 250, 500];
+const MAX_PAGE_SIZE = 999;
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZE_STORAGE_KEY = "fdg-contacts-page-size";
+
+function clampPageSize(value) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_PAGE_SIZE;
+  return Math.min(n, MAX_PAGE_SIZE);
+}
+
+function loadSavedPageSize() {
+  try {
+    const saved = localStorage.getItem(PAGE_SIZE_STORAGE_KEY);
+    return saved ? clampPageSize(saved) : DEFAULT_PAGE_SIZE;
+  } catch {
+    return DEFAULT_PAGE_SIZE;
+  }
+}
+
+function savePageSize(size) {
+  try {
+    localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(size));
+  } catch {
+    // Storage unavailable (private mode etc.) — the size just won't persist.
+  }
+}
 
 function getInitials(name) {
   const s = String(name || "").trim();
@@ -32,10 +58,11 @@ function avatarColor(name) {
 }
 
 export default function ContactsPage() {
+  const [initialPageSize] = useState(loadSavedPageSize);
   const [contacts, setContacts] = useState([]);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 25,
+    limit: initialPageSize,
     total: 0,
     totalPages: 1,
     hasNextPage: false,
@@ -62,6 +89,12 @@ export default function ContactsPage() {
   const [bulkEnrolling, setBulkEnrolling] = useState(false);
   const [selectedContactIds, setSelectedContactIds] = useState([]);
 
+  // Custom page size: shown as a number box when the size isn't a preset.
+  const [customPageSize, setCustomPageSize] = useState(
+    !PAGE_SIZE_OPTIONS.includes(initialPageSize)
+  );
+  const [pageSizeDraft, setPageSizeDraft] = useState(String(initialPageSize));
+
   async function fetchContacts(
     nextPage = 1,
     nextSearch = appliedSearch,
@@ -75,7 +108,7 @@ export default function ContactsPage() {
 
       const params = new URLSearchParams({
         page: String(nextPage),
-        limit: String(Math.min(nextLimit || 10, 500)),
+        limit: String(clampPageSize(nextLimit)),
         search: nextSearch,
         status: nextStatus,
       });
@@ -272,8 +305,12 @@ export default function ContactsPage() {
     fetchContacts(1, appliedSearch, nextStatus, pagination.limit);
   }
 
-  function handleLimitChange(e) {
-    const nextLimit = Math.min(Number(e.target.value) || 10, 500);
+  function applyLimit(value) {
+    const nextLimit = clampPageSize(value);
+    setPageSizeDraft(String(nextLimit));
+    savePageSize(nextLimit);
+
+    if (nextLimit === pagination.limit) return;
 
     setPagination((prev) => ({
       ...prev,
@@ -283,6 +320,25 @@ export default function ContactsPage() {
 
     setSelectedContactIds([]);
     fetchContacts(1, appliedSearch, status, nextLimit);
+  }
+
+  function handleLimitChange(e) {
+    if (e.target.value === "custom") {
+      setCustomPageSize(true);
+      setPageSizeDraft(String(pagination.limit));
+      return;
+    }
+
+    setCustomPageSize(false);
+    applyLimit(e.target.value);
+  }
+
+  function handleCustomLimitKeyDown(e) {
+    // Enter applies the size instead of submitting the search form.
+    if (e.key === "Enter") {
+      e.preventDefault();
+      applyLimit(pageSizeDraft);
+    }
   }
 
   function handlePrevPage() {
@@ -337,13 +393,32 @@ export default function ContactsPage() {
               ))}
             </select>
 
-            <select value={pagination.limit} onChange={handleLimitChange}>
+            <select
+              value={customPageSize ? "custom" : pagination.limit}
+              onChange={handleLimitChange}
+            >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>
                   Show {size}
                 </option>
               ))}
+              <option value="custom">Custom…</option>
             </select>
+
+            {customPageSize && (
+              <input
+                type="number"
+                className="page-size-input"
+                min={1}
+                max={MAX_PAGE_SIZE}
+                value={pageSizeDraft}
+                onChange={(e) => setPageSizeDraft(e.target.value)}
+                onKeyDown={handleCustomLimitKeyDown}
+                onBlur={() => applyLimit(pageSizeDraft)}
+                aria-label={`Rows per page (1–${MAX_PAGE_SIZE})`}
+                title={`Rows per page (1–${MAX_PAGE_SIZE}). Press Enter to apply.`}
+              />
+            )}
 
             <button type="submit">Search</button>
           </form>
