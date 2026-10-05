@@ -16,13 +16,49 @@
 
 import Contact from "../models/Contact.js";
 import UploadBatch from "../models/UploadBatch.js";
-import { parseContactFile } from "../utils/parseContactFile.js";
+import fs from "fs";
+import {
+  parseContactFile,
+  readContactFileColumns,
+} from "../utils/parseContactFile.js";
 import { getPhoneValidationResult } from "../utils/phone.js";
 import { createSystemLog } from "../services/systemLogService.js";
 
 function buildFullName(firstName, lastName, fullName) {
   if (fullName?.trim()) return fullName.trim();
   return `${firstName || ""} ${lastName || ""}`.trim();
+}
+
+// The mapping arrives as a JSON string inside the multipart form.
+function parseMappingField(raw) {
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const err = new Error("Column mapping is invalid");
+    err.statusCode = 400;
+    throw err;
+  }
+}
+
+export async function readColumns(req, res) {
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
+
+  try {
+    const columns = readContactFileColumns(req.file.path);
+    return res.status(200).json(columns);
+  } catch (error) {
+    console.error("Read columns error:", error);
+    return res.status(400).json({
+      message: error.message || "Failed to read the file's columns",
+    });
+  } finally {
+    // Only the headers were needed; the preview step uploads the file again.
+    fs.promises.unlink(req.file.path).catch(() => {});
+  }
 }
 
 export async function uploadPreview(req, res) {
@@ -38,7 +74,8 @@ export async function uploadPreview(req, res) {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    const parsedRows = parseContactFile(req.file.path);
+    const mapping = parseMappingField(req.body?.mapping);
+    const parsedRows = parseContactFile(req.file.path, mapping);
 
     const existingPhones = new Set(
       (
@@ -69,6 +106,7 @@ export async function uploadPreview(req, res) {
         lastName: raw.lastName || "",
         fullName,
         email: String(raw.email || "").trim().toLowerCase(),
+        domainName: String(raw.domainName || "").trim().toLowerCase(),
         phone: String(raw.phone || "").trim(),
         normalizedPhone,
       };
@@ -164,7 +202,7 @@ export async function uploadPreview(req, res) {
       },
     });
 
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       message: error.message || "Failed to generate upload preview",
     });
   }
@@ -231,6 +269,7 @@ export async function importContacts(req, res) {
       const lastName = row.lastName || "";
       const fullName = buildFullName(firstName, lastName, row.fullName);
       const email = String(row.email || "").trim().toLowerCase();
+      const domainName = String(row.domainName || "").trim().toLowerCase();
       const phone = String(row.phone || "").trim();
 
       const phoneCheck = getPhoneValidationResult(phone);
@@ -269,6 +308,7 @@ export async function importContacts(req, res) {
         lastName,
         fullName,
         email,
+        domainName,
         phone,
         normalizedPhone,
         source: "upload",

@@ -582,6 +582,11 @@ export default function ContactsPage() {
                   </div>
 
                   <div>
+                    <strong>Domain</strong>
+                    <p>{selectedContact.domainName || "-"}</p>
+                  </div>
+
+                  <div>
                     <strong>Phone</strong>
                     <p>{selectedContact.phone || "-"}</p>
                   </div>
