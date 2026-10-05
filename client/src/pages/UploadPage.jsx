@@ -2,8 +2,27 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "../services/api";
 import AppLayout from "../components/AppLayout";
 
+const MAPPING_FIELDS = [
+  { key: "firstName", label: "First name" },
+  { key: "lastName", label: "Last name" },
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Phone", required: true },
+  { key: "domainName", label: "Domain name" },
+];
+
+const EMPTY_MAPPING = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  domainName: "",
+};
+
 export default function UploadPage() {
   const [file, setFile] = useState(null);
+  const [columns, setColumns] = useState(null);
+  const [mapping, setMapping] = useState(EMPTY_MAPPING);
+  const [loadingColumns, setLoadingColumns] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -50,6 +69,44 @@ export default function UploadPage() {
     setPreview(null);
     setError("");
     setSuccess("");
+    loadColumns(selected);
+  }
+
+  async function loadColumns(selected) {
+    setColumns(null);
+    setMapping(EMPTY_MAPPING);
+
+    try {
+      setLoadingColumns(true);
+
+      const formData = new FormData();
+      formData.append("file", selected);
+
+      const data = await apiFetch("/contact-import/columns", {
+        method: "POST",
+        body: formData,
+      });
+
+      setColumns(data);
+      setMapping({ ...EMPTY_MAPPING, ...data.suggestedMapping });
+    } catch (err) {
+      setError(err.message || "Failed to read the file's columns");
+    } finally {
+      setLoadingColumns(false);
+    }
+  }
+
+  function handleMappingChange(field, column) {
+    setMapping((prev) => ({ ...prev, [field]: column }));
+    // A preview built with the old mapping no longer matches.
+    setPreview(null);
+  }
+
+  // Columns already picked for another field, so each column is used once.
+  function isColumnTaken(column, field) {
+    return MAPPING_FIELDS.some(
+      (f) => f.key !== field && mapping[f.key] === column
+    );
   }
 
   function handleFileChange(e) {
@@ -79,6 +136,16 @@ export default function UploadPage() {
       return;
     }
 
+    if (!columns) {
+      setError("The file's columns haven't been read yet");
+      return;
+    }
+
+    if (!mapping.phone) {
+      setError("Choose which column holds the phone number");
+      return;
+    }
+
     try {
       setLoadingPreview(true);
       setError("");
@@ -86,6 +153,7 @@ export default function UploadPage() {
 
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("mapping", JSON.stringify(mapping));
 
       const data = await apiFetch("/contact-import/upload-preview", {
         method: "POST",
@@ -151,6 +219,8 @@ export default function UploadPage() {
 
       setPreview(null);
       setFile(null);
+      setColumns(null);
+      setMapping(EMPTY_MAPPING);
       setEnrollAfterImport(false);
       setSelectedCampaignId("");
     } catch (err) {
@@ -204,6 +274,65 @@ export default function UploadPage() {
             </div>
           ) : null}
 
+          {loadingColumns ? (
+            <p className="t-sub">Reading columns…</p>
+          ) : null}
+
+          {columns ? (
+            <div className="column-mapping">
+              <div className="column-mapping-head">
+                <h2>Map columns</h2>
+                <p className="t-sub">
+                  Choose which column in your file fills each field.{" "}
+                  {columns.totalRows} rows found.
+                </p>
+              </div>
+
+              {MAPPING_FIELDS.map((field) => {
+                const column = mapping[field.key];
+                const samples = column ? columns.samples[column] || [] : [];
+
+                return (
+                  <div className="column-mapping-row" key={field.key}>
+                    <label htmlFor={`map-${field.key}`}>
+                      {field.label}
+                      {field.required ? <span className="req"> *</span> : null}
+                    </label>
+
+                    <select
+                      id={`map-${field.key}`}
+                      value={column}
+                      onChange={(e) =>
+                        handleMappingChange(field.key, e.target.value)
+                      }
+                    >
+                      <option value="">— None —</option>
+                      {columns.headers.map((header) => (
+                        <option
+                          key={header}
+                          value={header}
+                          disabled={isColumnTaken(header, field.key)}
+                        >
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="column-mapping-samples t-sub">
+                      {column
+                        ? samples.length
+                          ? samples.join(" · ")
+                          : "(column is empty)"
+                        : field.required
+                          ? "Required"
+                          : "Not imported"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
           <div className="upload-enroll-box">
             <label className="checkbox-row">
               <input
@@ -230,7 +359,10 @@ export default function UploadPage() {
           </div>
 
           <div className="upload-actions">
-            <button onClick={handlePreview} disabled={loadingPreview}>
+            <button
+              onClick={handlePreview}
+              disabled={loadingPreview || loadingColumns || !columns}
+            >
               {loadingPreview ? "Generating Preview..." : "Preview File"}
             </button>
 
@@ -263,6 +395,7 @@ export default function UploadPage() {
                     <th>#</th>
                     <th>Name</th>
                     <th>Email</th>
+                    <th>Domain</th>
                     <th>Phone</th>
                     <th>Normalized</th>
                   </tr>
@@ -273,6 +406,7 @@ export default function UploadPage() {
                       <td>{row.rowNumber}</td>
                       <td>{row.fullName}</td>
                       <td>{row.email || "-"}</td>
+                      <td>{row.domainName || "-"}</td>
                       <td>{row.phone}</td>
                       <td>{row.normalizedPhone}</td>
                     </tr>

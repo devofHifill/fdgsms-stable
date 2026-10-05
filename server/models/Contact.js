@@ -23,6 +23,12 @@ const contactSchema = new mongoose.Schema(
       lowercase: true,
       default: "",
     },
+    domainName: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: "",
+    },
     phone: {
       type: String,
       trim: true,
