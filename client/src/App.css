@@ -418,6 +418,7 @@ p.status-success {
 .contacts-filters { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
 .contacts-filters input { min-width: 220px; }
 .contacts-filters select, .contacts-filters input { width: auto; }
+.contacts-filters input.page-size-input { min-width: 0; width: 90px; }
 .bulk-enroll-bar {
   display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
   background: var(--surface); border: 1px solid var(--border);
