@@ -18,6 +18,7 @@ export function buildContactTemplateVariables(contact = {}) {
     firstName,
     lastName,
     email: String(contact.email || "").trim(),
+    domainName: String(contact.domainName || "").trim(),
     phone: String(contact.phone || "").trim(),
     normalizedPhone: String(contact.normalizedPhone || "").trim(),
   };
