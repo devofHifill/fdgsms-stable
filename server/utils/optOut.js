@@ -55,6 +55,18 @@ export function classifyInboundKeyword(body) {
 }
 
 /**
+ * START-type keywords only mean "opt me back in" for a contact who is
+ * currently opted out. For everyone else (e.g. "Yes" answering a campaign
+ * question) they are a normal reply.
+ */
+export function isOptInRequest(keyword, contact) {
+  return (
+    keyword === "start" &&
+    Boolean(contact?.optedOut || contact?.status === "opted_out")
+  );
+}
+
+/**
  * Apply an opt-out: mark the contact opted out and stop any active enrollments.
  * @returns {Promise<{ stoppedEnrollments: number }>}
  */

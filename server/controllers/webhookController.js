@@ -23,6 +23,7 @@ import {
   classifyInboundKeyword,
   applyOptOut,
   applyOptIn,
+  isOptInRequest,
 } from "../utils/optOut.js";
 import { maybeEnqueueAiReply } from "../services/aiReplyService.js";
 import { createSystemLog } from "../services/systemLogService.js";
@@ -149,7 +150,9 @@ export async function handleInboundSMS(req, res) {
       return res.status(200).send("OK");
     }
 
-    if (keyword === "start") {
+    // START/YES only re-subscribes a contact who is opted out. For an active
+    // contact it is an ordinary reply and falls through to the handling below.
+    if (isOptInRequest(keyword, contact)) {
       await applyOptIn(contact);
 
       await createSystemLog({
