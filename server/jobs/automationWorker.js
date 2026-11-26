@@ -12,6 +12,30 @@ import {
   isAllowedSmsLineType,
 } from "../services/phoneIntelligenceService.js";
 import { renderTemplate, buildContactTemplateVariables } from "../utils/template.js";
+import { singleFlight } from "../utils/singleFlight.js";
+import { isWithinSendingWindow } from "../utils/timezone.js";
+
+// While a step is being sent, the enrollment's nextSendAt is pushed this far
+// ahead so no other run (or server process) can pick the same step up. Every
+// outcome of the send overwrites it; it only lingers if the process dies
+// mid-send, and then the step is retried after the lock expires.
+export const SEND_LOCK_MS = 10 * 60 * 1000;
+
+// Atomically take the right to send the enrollment's current step. Matches on
+// the values this run read, so if anyone else already advanced, rescheduled or
+// stopped it, this returns null and the step is not sent again.
+export async function claimEnrollmentStep(enrollment, now = new Date()) {
+  return Enrollment.findOneAndUpdate(
+    {
+      _id: enrollment._id,
+      status: "active",
+      currentStep: enrollment.currentStep,
+      nextSendAt: enrollment.nextSendAt,
+    },
+    { $set: { nextSendAt: new Date(now.getTime() + SEND_LOCK_MS) } },
+    { returnDocument: "after" }
+  );
+}
 
 function getSortedSteps(campaign) {
   return [...(campaign?.steps || [])].sort(
@@ -36,34 +60,6 @@ function computeNextSendAtFromStep(step, baseDate = new Date()) {
   return new Date(baseDate.getTime() + delayHours * 60 * 60 * 1000);
 }
 
-function isWithinSendingWindow(now, sendingWindow) {
-  const startHour = Number(sendingWindow?.startHour ?? 9);
-  const endHour = Number(sendingWindow?.endHour ?? 18);
-
-  if (
-    Number.isNaN(startHour) ||
-    Number.isNaN(endHour) ||
-    startHour < 0 ||
-    startHour > 23 ||
-    endHour < 0 ||
-    endHour > 23
-  ) {
-    return true;
-  }
-
-  if (startHour === endHour) {
-    return true;
-  }
-
-  const currentHour = now.getHours();
-
-  if (startHour < endHour) {
-    return currentHour >= startHour && currentHour < endHour;
-  }
-
-  return currentHour >= startHour || currentHour < endHour;
-}
-
 async function getAutomationSettings() {
   let settings = await AutomationSettings.findOne({ key: "default" });
 
@@ -82,7 +78,7 @@ async function getAutomationSettings() {
   return settings;
 }
 
-export async function runAutomationCycle() {
+async function automationCycle() {
   const now = new Date();
 
   try {
@@ -92,7 +88,9 @@ export async function runAutomationCycle() {
       return;
     }
 
-    if (!isWithinSendingWindow(now, settings.sendingWindow)) {
+    // The window is read in the account timezone (Settings page), not the
+    // server clock, which is UTC in Docker. AI replies are not limited by it.
+    if (!isWithinSendingWindow(now, settings.sendingWindow, settings.timezone)) {
       return;
     }
 
@@ -324,6 +322,12 @@ export async function runAutomationCycle() {
           continue;
         }
 
+        const claimed = await claimEnrollmentStep(enrollment);
+        if (!claimed) {
+          continue; // another run already took (or changed) this step
+        }
+        enrollment.nextSendAt = claimed.nextSendAt;
+
         let renderedBody = currentStep.body;
 
         try {
@@ -476,3 +480,6 @@ export async function runAutomationCycle() {
     });
   }
 }
+
+// Interval ticks that arrive while a cycle is still running are skipped.
+export const runAutomationCycle = singleFlight(automationCycle);

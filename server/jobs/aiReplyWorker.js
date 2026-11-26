@@ -19,10 +19,69 @@ import {
   evaluateInboundAiEligibility,
 } from "../services/aiReplyService.js";
 import { generateAiReply } from "../services/aiReplyGenerator.js";
+import { getRecentAiHistory } from "../services/aiHistoryService.js";
 import { decideOutcome, enforceMessageFormat } from "../services/ai/guardrails.js";
+import { singleFlight } from "../utils/singleFlight.js";
 
 const MAX_JOBS_PER_RUN = 10;
-const HISTORY_LIMIT = 50;
+// A job still "processing" after this long was abandoned by a crash/restart.
+export const STUCK_JOB_MS = 5 * 60 * 1000;
+
+export function maxAttemptsFor(settings) {
+  return (Number(settings?.retryLimit) || 2) + 1;
+}
+
+// Atomically move one job pending → processing. Returns the claimed job, or
+// null if another run (or another server process) already took it.
+export async function claimAiReplyJob(jobId, now = new Date()) {
+  return AiReplyJob.findOneAndUpdate(
+    { _id: jobId, status: "pending" },
+    { $set: { status: "processing", claimedAt: now }, $inc: { attempts: 1 } },
+    { returnDocument: "after" }
+  );
+}
+
+// Jobs abandoned in "processing" block every future AI reply for that contact
+// (the enqueue dedup sees them as in flight). Put them back in the queue, or
+// fail them if they are out of attempts. Jobs from before claimedAt existed
+// are judged by updatedAt.
+export async function recoverStuckAiReplyJobs(settings, now = new Date()) {
+  const cutoff = new Date(now.getTime() - STUCK_JOB_MS);
+  const stale = {
+    status: "processing",
+    $or: [
+      { claimedAt: { $lt: cutoff } },
+      { claimedAt: null, updatedAt: { $lt: cutoff } },
+    ],
+  };
+  const maxAttempts = maxAttemptsFor(settings);
+  const error = "Recovered: job was left in processing (worker crash or restart)";
+
+  const failed = await AiReplyJob.updateMany(
+    { ...stale, attempts: { $gte: maxAttempts } },
+    { $set: { status: "failed", lastError: error, processedAt: now, claimedAt: null } }
+  );
+  const requeued = await AiReplyJob.updateMany(stale, {
+    $set: { status: "pending", lastError: error, claimedAt: null },
+  });
+
+  const counts = {
+    requeued: requeued.modifiedCount || 0,
+    failed: failed.modifiedCount || 0,
+  };
+
+  if (counts.requeued || counts.failed) {
+    await createSystemLog({
+      level: "warn",
+      category: "ai",
+      event: "ai_reply_jobs_recovered",
+      message: `Recovered stuck AI reply jobs: ${counts.requeued} requeued, ${counts.failed} failed`,
+      metadata: counts,
+    });
+  }
+
+  return counts;
+}
 
 async function finalize(job, { status, decision, error }) {
   job.status = status;
@@ -48,7 +107,7 @@ async function skip(job, reason) {
 
 // Error path — retry until retryLimit is exhausted, then fail.
 async function retryOrFail(job, settings, errorMessage) {
-  const maxAttempts = (Number(settings.retryLimit) || 2) + 1;
+  const maxAttempts = maxAttemptsFor(settings);
 
   if (job.attempts >= maxAttempts) {
     await finalize(job, { status: "failed", error: errorMessage });
@@ -73,12 +132,8 @@ async function retryOrFail(job, settings, errorMessage) {
   });
 }
 
+// `job` has already been claimed (status "processing") by claimAiReplyJob.
 async function processAiReplyJob(job, settings) {
-  // Claim the job so it isn't picked up again this run.
-  job.status = "processing";
-  job.attempts = (job.attempts || 0) + 1;
-  await job.save();
-
   const [contact, inbound] = await Promise.all([
     Contact.findById(job.contactId),
     SMSMessage.findById(job.inboundMessageId),
@@ -114,12 +169,8 @@ async function processAiReplyJob(job, settings) {
     return skip(job, "missing_phone");
   }
 
-  // Build conversation history (oldest first) for context.
-  const history = await SMSMessage.find({ contactId: contact._id })
-    .sort({ createdAt: 1 })
-    .limit(HISTORY_LIMIT)
-    .select("direction body")
-    .lean();
+  // Latest messages (returned oldest first) for context.
+  const history = await getRecentAiHistory(contact._id);
 
   let reply;
   try {
@@ -226,7 +277,7 @@ async function processAiReplyJob(job, settings) {
   }
 }
 
-export async function runAiReplyCycle() {
+async function aiReplyCycle() {
   try {
     const settings = await getAiSettings();
 
@@ -235,11 +286,18 @@ export async function runAiReplyCycle() {
       return;
     }
 
-    const jobs = await AiReplyJob.find({ status: "pending" })
-      .sort({ createdAt: 1 })
-      .limit(MAX_JOBS_PER_RUN);
+    await recoverStuckAiReplyJobs(settings);
 
-    for (const job of jobs) {
+    const candidates = await AiReplyJob.find({ status: "pending" })
+      .sort({ createdAt: 1 })
+      .limit(MAX_JOBS_PER_RUN)
+      .select("_id")
+      .lean();
+
+    for (const { _id } of candidates) {
+      const job = await claimAiReplyJob(_id);
+      if (!job) continue; // claimed elsewhere — never process a job twice
+
       try {
         await processAiReplyJob(job, settings);
       } catch (err) {
@@ -263,3 +321,6 @@ export async function runAiReplyCycle() {
     });
   }
 }
+
+// Interval ticks that arrive while a cycle is still running are skipped.
+export const runAiReplyCycle = singleFlight(aiReplyCycle);

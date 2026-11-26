@@ -24,7 +24,9 @@ function fileFilter(req, file, cb) {
   const ext = path.extname(file.originalname).toLowerCase();
 
   if (!allowedExt.includes(ext)) {
-    return cb(new Error("Only CSV, XLSX, and XLS files are allowed"));
+    const err = new Error("Only CSV, XLSX, and XLS files are allowed.");
+    err.statusCode = 400;
+    return cb(err);
   }
 
   cb(null, true);
