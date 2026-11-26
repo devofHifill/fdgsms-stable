@@ -15,9 +15,14 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 4  | AI jobs stuck in "processing" forever | 🟠 High | 🧪 | `fix/worker-atomic-claim` (with #3) | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
 | 5  | AI sees oldest 50 messages, not newest | 🟠 High | 🟨 | `fix/ai-history-latest` | |
 | 6  | Sending window uses UTC, AI ignores it | 🟠 High | ⏸ | `fix/sending-window-timezone` | |
-| 7  | Uploaded contact files never deleted | 🟡 Medium | 🟨 | `fix/upload-file-cleanup` | |
-| 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | ⬜ | `fix/encrypt-twilio-token` | |
-ed uploads | 🟢 Low | ⬜ | `chore/error-handler` | |
+| 7  | Uploaded contact files never deleted | 🟡 Medium | ⬜ | `fix/upload-file-cleanup` | |
+| 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | 🟨 | `fix/encrypt-twilio-token` | |
+| 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | ⬜ | `fix/login-hardening` | |
+| 10 | Client: sign out on expired login (401) | 🟡 Medium | ⬜ | `fix/client-401-logout` | |
+| 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | ⬜ | `fix/inbound-dedupe` | |
+| 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | ⬜ | `fix/opt-out-keywords` | |
+| 13 | Readable errors for bad/oversized uploads | 🟢 Low | ⬜ | `chore/error-handler` | |
+
 | 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
 
 | 15 | Remove hardcoded IP from CORS list | 🟢 Low | ⬜ | `chore/cleanup` | |
@@ -178,6 +183,20 @@ receives rows from the client, so the file isn't needed later). One-off: clear t
 (secretBox passes them through) and get encrypted on next save.
 **Files:** `server/controllers/twilioSettingsController.js`, `server/services/twilioService.js`.
 **How to verify:** save token → DB shows `enc:v1:…`; sending still works.
+
+**Done (on `fix/encrypt-twilio-token`):**
+- Saving a token stores it with `encryptSecret`; `getActiveTwilioConfig` decrypts it
+  (`readStoredAuthToken`), so sending and the webhook signature check get the real token.
+- Settings page shows `maskSecret` (last 4 only), never the token or ciphertext.
+- Existing plain-text tokens are encrypted once at server start (`encryptStoredTwilioToken` in
+  `index.js`) and on any settings save, so live doesn't wait for someone to re-enter it.
+- A token that no longer decrypts logs a clear console error.
+- Checked: `server/tests/twilioToken.test.js`, plus a throwaway-DB run with a fake token (startup
+  encryption, idempotent re-run, masked GET, blank-token save keeps it, new token round-trips).
+  Not checked against real Twilio — do that on staging (send a text + receive one).
+- ⚠️ The key is derived from `AI_SECRET_KEY`, else `JWT_SECRET`. Changing that value on a server
+  makes the stored token unreadable → sending fails and every inbound webhook gets 403 until the
+  token is re-entered. The AI key has the same dependency.
 
 ### 9. Login hardening — 🟡 Medium
 **Plan:** `crypto.timingSafeEqual` compare; simple in-memory attempt limiter (e.g. 10 tries /

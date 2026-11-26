@@ -21,6 +21,7 @@ import aiRoutes from "./routes/aiRoutes.js";
 
 import { runAutomationCycle } from "./jobs/automationWorker.js";
 import { runAiReplyCycle } from "./jobs/aiReplyWorker.js";
+import { encryptStoredTwilioToken } from "./services/twilioService.js";
 
 dotenv.config();
 
@@ -83,6 +84,11 @@ app.use("/api/ai", aiRoutes);
 
 async function startServer() {
   await connectDB();
+
+  // Never block startup on this: a failure only means the token stays as-is.
+  await encryptStoredTwilioToken().catch((error) => {
+    console.error("Could not encrypt the stored Twilio auth token:", error);
+  });
 
   const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
