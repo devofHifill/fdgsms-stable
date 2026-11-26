@@ -20,7 +20,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | ⬜ | `fix/login-hardening` | |
 | 10 | Client: sign out on expired login (401) | 🟡 Medium | 🟨 | `fix/client-401-logout` | |
 | 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | 🟨 | `fix/inbound-dedupe` | |
-| 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | ⬜ | `fix/opt-out-keywords` | |
+| 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | 🟨 | `fix/opt-out-keywords` | |
 | 13 | Readable errors for bad/oversized uploads | 🟢 Low | ⬜ | `chore/error-handler` | |
 | 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
 | 15 | Remove hardcoded IP from CORS list | 🟢 Low | ⬜ | `chore/cleanup` | |
@@ -224,6 +224,13 @@ if found, return 200 and skip. Optionally a partial unique index on inbound `pro
 Keep the exact-whole-message rule so "stop by later" is still not an opt-out.
 **Files:** `server/utils/optOut.js`.
 **How to verify:** small `node --test` for the keyword classifier.
+
+**Done (on `fix/opt-out-keywords`):**
+- `revoke` added to the opt-out words.
+- Spaces are removed before matching, so `STOP ALL`, `stop  all`, `OPT OUT` and `Opt in` match
+  `stopall` / `optout` / `optin`. The whole message must still be the keyword: "stop by later",
+  "the end", "cancel my 3pm?" stay normal replies.
+- Checked: `server/tests/optOut.test.js` (10 tests).
 
 ### 13. Readable errors for bad uploads — 🟢 Low
 **Plan:** add a final Express error handler that turns `MulterError` / file-type errors into
