@@ -11,8 +11,8 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 |----|-----|----------|--------|--------|----|
 | 1  | Verify Twilio signature on webhooks | 🔴 Critical | ✅ | `fix/twilio-webhook-signature` | [#44](https://github.com/devofHifill/fdgsms-stable/pull/44) → main [#47](https://github.com/devofHifill/fdgsms-stable/pull/47) |
 | 2  | "Yes" reply treated as opt-in, not a reply | 🔴 Critical | ✅ | `fix/yes-reply-not-opt-in` | [#45](https://github.com/devofHifill/fdgsms-stable/pull/45) → main [#47](https://github.com/devofHifill/fdgsms-stable/pull/47) |
-| 3  | AI replies can be sent twice (overlapping runs) | 🔴 Critical | ⬜ | `fix/worker-atomic-claim` | |
-| 4  | AI jobs stuck in "processing" forever | 🟠 High | ⬜ | `fix/worker-atomic-claim` (with #3) | |
+| 3  | AI replies can be sent twice (overlapping runs) | 🔴 Critical | 🟨 | `fix/worker-atomic-claim` | |
+| 4  | AI jobs stuck in "processing" forever | 🟠 High | 🟨 | `fix/worker-atomic-claim` (with #3) | |
 | 5  | AI sees oldest 50 messages, not newest | 🟠 High | ⬜ | `fix/ai-history-latest` | |
 | 6  | Sending window uses UTC, AI ignores it | 🟠 High | ⏸ | `fix/sending-window-timezone` | |
 | 7  | Uploaded contact files never deleted | 🟡 Medium | ⬜ | `fix/upload-file-cleanup` | |
@@ -25,8 +25,9 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
 | 15 | Remove hardcoded IP from CORS list | 🟢 Low | ⬜ | `chore/cleanup` | |
 | 16 | Remove dead commented code + stray root file | 🟢 Low | ⬜ | `chore/cleanup` (with #15) | |
+| 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | ⬜ | `fix/systemlog-ai-category` | |
 
-**Progress:** 2 / 16 done
+**Progress:** 2 / 17 done
 
 ---
 
@@ -91,6 +92,29 @@ for that contact.
 (no `claimedAt`) get reset by the same rule using `updatedAt`.
 **Files:** `server/jobs/aiReplyWorker.js`.
 **How to verify:** set a job to `processing` with an old timestamp → next cycle recovers it.
+
+**Done (#3 + #4, on `fix/worker-atomic-claim`):**
+- `server/utils/singleFlight.js` (new): both `runAiReplyCycle` and `runAutomationCycle` skip a
+  tick while the previous run is still going.
+- AI worker claims each job with one `findOneAndUpdate` (pending → processing, sets `claimedAt`,
+  `attempts + 1`); a job claimed elsewhere is skipped.
+- Each AI cycle first recovers jobs stuck in `processing` for 5+ min (by `claimedAt`, or
+  `updatedAt` for old jobs): back to `pending`, or `failed` if out of attempts.
+- Campaign worker claims the enrollment step right before sending by pushing `nextSendAt`
+  10 min ahead, matching on the step and time it read; a step already taken, rescheduled or
+  stopped (e.g. the contact replied) is not sent.
+- Checked: `server/tests/singleFlight.test.js`, plus a throwaway-DB run: 5 racing claims → 1 job
+  sent; 2 racing campaign runs → 1 step sent; stuck jobs recovered, fresh ones left alone.
+- Known limit: if the server dies *after* Twilio accepted a text but *before* the result is
+  saved, the recovered job/step is retried once, so that one text can go out twice. Rare; needs
+  an idempotency key to close fully.
+
+### 17. AI system logs never saved — 🟠 High
+**Problem:** `SystemLog.category` only allows sms/upload/webhook/automation/auth/api/system.
+Every `category: "ai"` log (reply sent, skipped, drafted, errors, recovered jobs) fails validation
+and is dropped with only a console line, so the AI Analytics page's activity list is always empty.
+**Plan:** add `"ai"` to the enum in `server/models/SystemLog.js`.
+**How to verify:** AI test reply or a skipped job → entry shows on the Logs page under AI.
 
 ### 5. AI sees oldest 50 messages — 🟠 High
 **Problem:** history query sorts oldest-first then `limit(50)` → long threads lose the latest
