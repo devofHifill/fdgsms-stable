@@ -22,7 +22,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | ⬜ | `fix/inbound-dedupe` | |
 | 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | ⬜ | `fix/opt-out-keywords` | |
 | 13 | Readable errors for bad/oversized uploads | 🟢 Low | 🟨 | `chore/error-handler` | |
-| 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
+| 14 | Escape Logs page search input | 🟢 Low | 🟨 | `chore/error-handler` (with #13) | |
 | 15 | Remove hardcoded IP from CORS list | 🟢 Low | ⬜ | `chore/cleanup` | |
 | 16 | Remove dead commented code + stray root file | 🟢 Low | ⬜ | `chore/cleanup` (with #15) | |
 | 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | ⬜ | `fix/systemlog-ai-category` | |
@@ -194,7 +194,12 @@ Keep the exact-whole-message rule so "stop by later" is still not an opt-out.
 - Checked: `server/tests/errorHandler.test.js`; and on the local API: `.pdf` → 400 file-type
   message, 15 MB CSV → 400 size message, bad JSON → 400, unknown origin → 403, good CSV → 200.
   Not clicked through the Upload page (the pane can't pick local files); the page shows `message`.
-- #14 (escape Logs search) is meant for this branch too and isn't done yet.
+
+**#14 done (same branch):**
+- `escapeRegex` moved to new `server/utils/regex.js`; used by the Contacts search (unchanged
+  behaviour) and now the Logs search, so text is matched literally.
+- Checked: `server/tests/regex.test.js`; local API: Logs search `(`, `a+`, `[` → normal empty
+  result instead of an error; `upload_preview` still finds entries; Contacts search `(` fine.
 
 ### 14. Escape Logs search — 🟢 Low (with #13)
 **Plan:** reuse the existing `escapeRegex` from `contactController.js` (move to `utils/`).
