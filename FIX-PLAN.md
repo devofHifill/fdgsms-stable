@@ -3,7 +3,7 @@
 Created 2026-11-10 from the code review. One fix at a time, each on its own branch,
 merged to `staging` → tested on the staging site → promoted to `main`.
 
-**Status key:** ⬜ To do · 🟨 In progress · 🟦 In review (PR open) · ✅ Done (on main) · ⏸ Waiting on a decision
+**Status key:** ⬜ To do · 🟨 In progress · 🟦 In review (PR open) · 🧪 On staging, testing · ✅ Done (on main) · ⏸ Waiting on a decision
 
 ## Tracker
 
@@ -11,8 +11,8 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 |----|-----|----------|--------|--------|----|
 | 1  | Verify Twilio signature on webhooks | 🔴 Critical | ✅ | `fix/twilio-webhook-signature` | [#44](https://github.com/devofHifill/fdgsms-stable/pull/44) → main [#47](https://github.com/devofHifill/fdgsms-stable/pull/47) |
 | 2  | "Yes" reply treated as opt-in, not a reply | 🔴 Critical | ✅ | `fix/yes-reply-not-opt-in` | [#45](https://github.com/devofHifill/fdgsms-stable/pull/45) → main [#47](https://github.com/devofHifill/fdgsms-stable/pull/47) |
-| 3  | AI replies can be sent twice (overlapping runs) | 🔴 Critical | 🟨 | `fix/worker-atomic-claim` | |
-| 4  | AI jobs stuck in "processing" forever | 🟠 High | 🟨 | `fix/worker-atomic-claim` (with #3) | |
+| 3  | AI replies can be sent twice (overlapping runs) | 🔴 Critical | 🧪 | `fix/worker-atomic-claim` | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
+| 4  | AI jobs stuck in "processing" forever | 🟠 High | 🧪 | `fix/worker-atomic-claim` (with #3) | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
 | 5  | AI sees oldest 50 messages, not newest | 🟠 High | ⬜ | `fix/ai-history-latest` | |
 | 6  | Sending window uses UTC, AI ignores it | 🟠 High | ⏸ | `fix/sending-window-timezone` | |
 | 7  | Uploaded contact files never deleted | 🟡 Medium | ⬜ | `fix/upload-file-cleanup` | |
@@ -93,7 +93,7 @@ for that contact.
 **Files:** `server/jobs/aiReplyWorker.js`.
 **How to verify:** set a job to `processing` with an old timestamp → next cycle recovers it.
 
-**Done (#3 + #4, on `fix/worker-atomic-claim`):**
+**Done (#3 + #4, merged to `staging` in [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) on 2026-11-26; not on `main` yet):**
 - `server/utils/singleFlight.js` (new): both `runAiReplyCycle` and `runAutomationCycle` skip a
   tick while the previous run is still going.
 - AI worker claims each job with one `findOneAndUpdate` (pending → processing, sets `claimedAt`,
