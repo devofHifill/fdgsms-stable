@@ -1,20 +1,16 @@
 import TwilioSettings from "../models/TwilioSettings.js";
+import { encryptSecret, isEncrypted, maskSecret } from "../utils/secretBox.js";
 
-// The auth token is never returned to the client in full. We expose only a
-// masked hint (whether it is set + the last 4 chars) so the UI can show status.
-function maskToken(token) {
-  if (!token) return "";
-  const last4 = token.slice(-4);
-  return `••••••••${last4}`;
-}
-
+// The auth token is stored encrypted and never returned to the client in full.
+// We expose only a masked hint (whether it is set + the last 4 chars) so the
+// UI can show status.
 function serialize(item) {
   return {
     accountSid: item?.accountSid || "",
     phoneNumber: item?.phoneNumber || "",
     messagingServiceSid: item?.messagingServiceSid || "",
     authTokenSet: Boolean(item?.authToken),
-    authTokenMasked: maskToken(item?.authToken),
+    authTokenMasked: maskSecret(item?.authToken),
     updatedAt: item?.updatedAt,
   };
 }
@@ -54,7 +50,10 @@ export async function updateTwilioSettings(req, res) {
     // Only overwrite the stored auth token when a new, non-empty value is sent.
     // A blank field means "keep the existing token" (the GET never exposes it).
     if (typeof authToken === "string" && authToken.trim()) {
-      item.authToken = authToken.trim();
+      item.authToken = encryptSecret(authToken.trim());
+    } else if (item.authToken && !isEncrypted(item.authToken)) {
+      // Token saved before encryption existed → encrypt it now.
+      item.authToken = encryptSecret(item.authToken);
     }
 
     if (phoneNumber !== undefined) {

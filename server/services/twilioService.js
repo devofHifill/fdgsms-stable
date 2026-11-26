@@ -1,8 +1,36 @@
 import twilio from "twilio";
 import TwilioSettings from "../models/TwilioSettings.js";
+import { decryptSecret, encryptSecret, isEncrypted } from "../utils/secretBox.js";
 
 let cachedClient = null;
 let cachedKey = null;
+
+// The auth token is stored encrypted (enc:v1:…). Plaintext from before
+// encryption still reads as-is. A value that no longer decrypts means the
+// AI_SECRET_KEY / JWT_SECRET it was encrypted with has changed.
+export function readStoredAuthToken(stored) {
+  if (!stored) return "";
+  const token = decryptSecret(stored);
+  if (!token && isEncrypted(stored)) {
+    console.error(
+      "Twilio auth token in the DB could not be decrypted (AI_SECRET_KEY/JWT_SECRET changed?). " +
+        "Re-enter it on the Twilio settings page."
+    );
+  }
+  return token;
+}
+
+// One-off upgrade: encrypt an auth token that was saved before encryption
+// existed. Safe to run on every start; does nothing once it is encrypted.
+export async function encryptStoredTwilioToken() {
+  const item = await TwilioSettings.findOne({ key: "default" });
+  if (!item?.authToken || isEncrypted(item.authToken)) return false;
+
+  item.authToken = encryptSecret(item.authToken);
+  await item.save();
+  console.log("Encrypted the stored Twilio auth token.");
+  return true;
+}
 
 // Resolve the active Twilio config. DB-stored settings (managed from the
 // Settings page) take precedence over the TWILIO_* environment variables.
@@ -17,7 +45,7 @@ export async function getActiveTwilioConfig() {
 
   return {
     accountSid: settings?.accountSid || process.env.TWILIO_ACCOUNT_SID || "",
-    authToken: settings?.authToken || process.env.TWILIO_AUTH_TOKEN || "",
+    authToken: readStoredAuthToken(settings?.authToken) || process.env.TWILIO_AUTH_TOKEN || "",
     phoneNumber: settings?.phoneNumber || process.env.TWILIO_PHONE_NUMBER || "",
     messagingServiceSid:
       settings?.messagingServiceSid ||
