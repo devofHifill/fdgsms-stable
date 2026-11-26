@@ -18,7 +18,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 7  | Uploaded contact files never deleted | 🟡 Medium | 🟨 | `fix/upload-file-cleanup` | |
 | 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | ⬜ | `fix/encrypt-twilio-token` | |
 | 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | ⬜ | `fix/login-hardening` | |
-| 10 | Client: sign out on expired login (401) | 🟡 Medium | ⬜ | `fix/client-401-logout` | |
+| 10 | Client: sign out on expired login (401) | 🟡 Medium | 🟨 | `fix/client-401-logout` | |
 | 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | ⬜ | `fix/inbound-dedupe` | |
 | 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | ⬜ | `fix/opt-out-keywords` | |
 | 13 | Readable errors for bad/oversized uploads | 🟢 Low | ⬜ | `chore/error-handler` | |
@@ -192,6 +192,14 @@ receives rows from the client, so the file isn't needed later). One-off: clear t
 call itself).
 **Files:** `client/src/services/api.js`, maybe `client/src/context/AuthContext.jsx`.
 **How to verify:** put a bad token in localStorage → app returns to login page.
+
+**Done (on `fix/client-401-logout`):**
+- `apiFetch`: a `401` on a request that carried the token clears `token`/`user` and fires
+  `fdgsms:auth-expired`. The login call sends no token, so a wrong password just shows its error.
+- `AuthContext` listens and signs out; `ProtectedRoute` then shows `/login` (no full reload).
+- Only `requireAuth` and login return 401 on the server, so nothing else triggers it.
+- Checked in the browser: bad token on `/contacts` → `/login` with storage cleared; wrong
+  password → "Invalid email or password", stays on login; correct login → dashboard.
 
 ### 11. Ignore duplicate inbound texts — 🟡 Medium
 **Plan:** before saving, check for an existing inbound message with the same `MessageSid`;
