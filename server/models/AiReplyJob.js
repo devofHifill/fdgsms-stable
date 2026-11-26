@@ -43,6 +43,12 @@ const aiReplyJobSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // When the worker claimed the job (status → processing). Used to spot
+    // jobs left in "processing" by a crash or restart and recover them.
+    claimedAt: {
+      type: Date,
+      default: null,
+    },
 
     // Structured AI output (filled in Phase 3/4). Mirrors the AI service's
     // { text, intent, confidence, escalate } contract.
