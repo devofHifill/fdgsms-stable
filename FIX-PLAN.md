@@ -19,9 +19,11 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | ⬜ | `fix/encrypt-twilio-token` | |
 ed uploads | 🟢 Low | ⬜ | `chore/error-handler` | |
 | 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
+
 | 15 | Remove hardcoded IP from CORS list | 🟢 Low | ⬜ | `chore/cleanup` | |
 | 16 | Remove dead commented code + stray root file | 🟢 Low | ⬜ | `chore/cleanup` (with #15) | |
 | 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | 🟨 | `fix/systemlog-ai-category` | |
+
 
 **Progress:** 2 / 17 done
 
@@ -263,6 +265,17 @@ the IP:port address first.
 **Plan:** delete commented-out blocks at the top of `server/index.js` and
 `server/routes/contactImportRoutes.js`; move or delete `Below is a developer-grade, task-by-task.txt`
 (merge into `Phases.txt` if still useful).
+
+**#15 + #16 done (on `chore/cleanup`):**
+- `http://82.25.109.223:5175` removed from the CORS list. Checked first: that address still serves
+  the app, but its `/api` returns the HTML page (the `serve` container has no API), so the app
+  there can't reach the API and the entry did nothing. The real sites use `CLIENT_URL`.
+- Removed the commented-out first version at the top of `server/index.js` (29 lines) and
+  `server/routes/contactImportRoutes.js` (16 lines).
+- Deleted `Below is a developer-grade, task-by-task.txt`: same as `Phases.txt` except one stray
+  "new twilio" line and blank lines, so nothing to merge.
+- Checked locally: API starts, local site logs in (CORS 200), the IP origin is refused, tests pass.
+  The refusal shows as 500 on this branch and becomes 403 once #13's error handler is merged.
 
 ---
 

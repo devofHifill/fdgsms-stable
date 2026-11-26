@@ -1,32 +1,3 @@
-// import express from "express";
-// import cors from "cors";
-
-// const app = express();
-
-// app.use(express.json());
-// app.use(cors(
-//   {
-//     origin: [
-//       "http://localhost:5173/"
-//       "http://localhost:5174/"
-//       "http://localhost:3000"
-//       // ADD PRODUCTION URL
-//     ],
-//     credentials:true,
-
-//   }
-// ));
-
-// app.get("/api/message", (req, res) => {
-//   res.json({ message: "hello from FDG" });
-// });
-
-// const port = 4000;
-
-// app.listen(port, () => {
-//   console.log(`Server is running at http://localhost:${port}`);
-// });
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -63,11 +34,12 @@ const AUTOMATION_INTERVAL_MS = 60000;
 // the human-takeover race buffer before the AI answers.
 const AI_REPLY_INTERVAL_MS = 20000;
 
+// Local dev origins + this server's own site (CLIENT_URL, https://APP_DOMAIN
+// in docker-compose).
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:3000",
-  "http://82.25.109.223:5175",
   process.env.CLIENT_URL,
 ].filter(Boolean);
 
