@@ -19,11 +19,11 @@ import {
   evaluateInboundAiEligibility,
 } from "../services/aiReplyService.js";
 import { generateAiReply } from "../services/aiReplyGenerator.js";
+import { getRecentAiHistory } from "../services/aiHistoryService.js";
 import { decideOutcome, enforceMessageFormat } from "../services/ai/guardrails.js";
 import { singleFlight } from "../utils/singleFlight.js";
 
 const MAX_JOBS_PER_RUN = 10;
-const HISTORY_LIMIT = 50;
 // A job still "processing" after this long was abandoned by a crash/restart.
 export const STUCK_JOB_MS = 5 * 60 * 1000;
 
@@ -169,12 +169,8 @@ async function processAiReplyJob(job, settings) {
     return skip(job, "missing_phone");
   }
 
-  // Build conversation history (oldest first) for context.
-  const history = await SMSMessage.find({ contactId: contact._id })
-    .sort({ createdAt: 1 })
-    .limit(HISTORY_LIMIT)
-    .select("direction body")
-    .lean();
+  // Latest messages (returned oldest first) for context.
+  const history = await getRecentAiHistory(contact._id);
 
   let reply;
   try {
