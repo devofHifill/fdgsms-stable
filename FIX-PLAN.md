@@ -25,7 +25,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
 | 15 | Remove hardcoded IP from CORS list | 🟢 Low | ⬜ | `chore/cleanup` | |
 | 16 | Remove dead commented code + stray root file | 🟢 Low | ⬜ | `chore/cleanup` (with #15) | |
-| 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | ⬜ | `fix/systemlog-ai-category` | |
+| 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | 🟨 | `fix/systemlog-ai-category` | |
 
 **Progress:** 2 / 17 done
 
@@ -115,6 +115,14 @@ Every `category: "ai"` log (reply sent, skipped, drafted, errors, recovered jobs
 and is dropped with only a console line, so the AI Analytics page's activity list is always empty.
 **Plan:** add `"ai"` to the enum in `server/models/SystemLog.js`.
 **How to verify:** AI test reply or a skipped job → entry shows on the Logs page under AI.
+
+**Done (on `fix/systemlog-ai-category`):**
+- `"ai"` added to the `SystemLog.category` enum; it was the only category the server writes
+  that was missing.
+- Logs page category filter gets an "AI" option (`client/src/pages/LogsPage.jsx`).
+- Checked: `server/tests/systemLog.test.js` (ai and all other used categories pass, unknown still
+  rejected); locally, saving AI Settings now writes `ai_settings_updated`, shown under the AI filter.
+- AI logs from before this fix were never stored, so the AI history starts from the deploy.
 
 ### 5. AI sees oldest 50 messages — 🟠 High
 **Problem:** history query sorts oldest-first then `limit(50)` → long threads lose the latest

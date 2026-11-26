@@ -15,6 +15,7 @@ const systemLogSchema = new mongoose.Schema(
         "upload",
         "webhook",
         "automation",
+        "ai",
         "auth",
         "api",
         "system",
