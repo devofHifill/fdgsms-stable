@@ -27,6 +27,7 @@ import {
 } from "../utils/optOut.js";
 import { maybeEnqueueAiReply } from "../services/aiReplyService.js";
 import { createSystemLog } from "../services/systemLogService.js";
+import { describeTwilioError, shouldApplyStatus } from "../utils/twilioErrors.js";
 
 const DUPLICATE_KEY = 11000;
 
@@ -316,6 +317,32 @@ const STATUS_VALUES = new Set([
   "received",
 ]);
 
+// A delivery error that means the number itself can't take our texts: stop
+// that contact's campaigns (and mark a dead number invalid) so we don't keep
+// paying to send to it. Temporary errors (30003, 30007, …) are only recorded.
+async function handlePermanentDeliveryFailure(message, error) {
+  const stop = await Enrollment.updateMany(
+    { contactId: message.contactId, status: "active" },
+    {
+      $set: {
+        status: "stopped",
+        stopReason: `undeliverable_${error.code}`,
+        lastError: error.message,
+        nextSendAt: null,
+      },
+    }
+  );
+
+  if (error.contactInvalid) {
+    await Contact.updateOne(
+      { _id: message.contactId, status: { $ne: "opted_out" } },
+      { $set: { status: "invalid" } }
+    );
+  }
+
+  return stop.modifiedCount ?? stop.nModified ?? 0;
+}
+
 export async function handleStatusCallback(req, res) {
   try {
     const { MessageSid, MessageStatus, ErrorCode } = req.body;
@@ -324,19 +351,57 @@ export async function handleStatusCallback(req, res) {
       return res.status(200).send("OK");
     }
 
+    const message = await SMSMessage.findOne({ providerMessageSid: MessageSid });
+    if (!message) {
+      return res.status(200).send("OK");
+    }
+
     const update = {};
-    if (MessageStatus && STATUS_VALUES.has(MessageStatus)) {
+    if (
+      MessageStatus &&
+      STATUS_VALUES.has(MessageStatus) &&
+      shouldApplyStatus(message.status, MessageStatus)
+    ) {
       update.status = MessageStatus;
     }
-    if (ErrorCode) {
-      update.errorCode = String(ErrorCode);
+
+    const error = describeTwilioError(ErrorCode);
+    if (error) {
+      update.errorCode = error.code;
+      update.errorMessage = error.message;
+      update["metadata.deliveryError"] = {
+        code: error.code,
+        permanent: error.permanent,
+      };
     }
 
     if (Object.keys(update).length) {
-      await SMSMessage.findOneAndUpdate(
-        { providerMessageSid: MessageSid },
-        { $set: update }
-      );
+      await SMSMessage.updateOne({ _id: message._id }, { $set: update });
+    }
+
+    const isFailure = MessageStatus === "undelivered" || MessageStatus === "failed";
+    if (isFailure && error && !message.errorCode) {
+      // First time we hear about this failure (Twilio can resend callbacks).
+      const stoppedEnrollments = error.permanent
+        ? await handlePermanentDeliveryFailure(message, error)
+        : 0;
+
+      await createSystemLog({
+        level: error.permanent ? "warn" : "error",
+        category: "sms",
+        event: "sms_delivery_failed",
+        message: `SMS ${MessageStatus}: ${error.message}`,
+        contactId: message.contactId,
+        enrollmentId: message.enrollmentId || null,
+        campaignId: message.campaignId || null,
+        metadata: {
+          messageSid: MessageSid,
+          errorCode: error.code,
+          permanent: error.permanent,
+          contactMarkedInvalid: Boolean(error.permanent && error.contactInvalid),
+          stoppedEnrollments,
+        },
+      });
     }
 
     return res.status(200).send("OK");
