@@ -15,6 +15,7 @@ const CATEGORY_OPTIONS = [
   { label: "Upload", value: "upload" },
   { label: "Webhook", value: "webhook" },
   { label: "Automation", value: "automation" },
+  { label: "AI", value: "ai" },
   { label: "Auth", value: "auth" },
   { label: "API", value: "api" },
   { label: "System", value: "system" },

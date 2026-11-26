@@ -28,6 +28,28 @@ import {
 import { maybeEnqueueAiReply } from "../services/aiReplyService.js";
 import { createSystemLog } from "../services/systemLogService.js";
 
+const DUPLICATE_KEY = 11000;
+
+// Twilio retries a webhook it thinks failed (timeout, 5xx) with the SAME
+// MessageSid. Processing it again would duplicate the message in the inbox,
+// stop/opt-out twice and queue a second AI reply.
+async function isDuplicateInbound(messageSid) {
+  if (!messageSid) return false;
+  return Boolean(
+    await SMSMessage.exists({ direction: "inbound", providerMessageSid: messageSid })
+  );
+}
+
+async function logDuplicateInbound(messageSid, from) {
+  await createSystemLog({
+    level: "info",
+    category: "webhook",
+    event: "inbound_sms_duplicate",
+    message: "Duplicate inbound SMS ignored (Twilio retry)",
+    metadata: { messageSid, from },
+  });
+}
+
 export async function handleInboundSMS(req, res) {
   try {
     const { From, To, Body, MessageSid } = req.body;
@@ -43,6 +65,11 @@ export async function handleInboundSMS(req, res) {
         },
       });
 
+      return res.status(200).send("OK");
+    }
+
+    if (await isDuplicateInbound(MessageSid)) {
+      await logDuplicateInbound(MessageSid, From);
       return res.status(200).send("OK");
     }
 
@@ -86,24 +113,35 @@ export async function handleInboundSMS(req, res) {
       return res.status(200).send("OK");
     }
 
-    const inboundMessage = await SMSMessage.create({
-      contactId: contact._id,
-      phone: contact.phone,
-      normalizedPhone: contact.normalizedPhone,
-      direction: "inbound",
-      body: Body,
-      provider: "twilio",
-      providerMessageSid: MessageSid || "",
-      status: "received",
-      enrollmentId: null,
-      campaignId: null,
-      stepNumber: null,
-      messageType: "inbound",
-      metadata: {
-        from: From,
-        to: To,
-      },
-    });
+    let inboundMessage;
+    try {
+      inboundMessage = await SMSMessage.create({
+        contactId: contact._id,
+        phone: contact.phone,
+        normalizedPhone: contact.normalizedPhone,
+        direction: "inbound",
+        body: Body,
+        provider: "twilio",
+        providerMessageSid: MessageSid || "",
+        status: "received",
+        enrollmentId: null,
+        campaignId: null,
+        stepNumber: null,
+        messageType: "inbound",
+        metadata: {
+          from: From,
+          to: To,
+        },
+      });
+    } catch (createError) {
+      // Two deliveries of the same text racing each other: the unique index
+      // on inbound providerMessageSid lets only one through.
+      if (createError?.code === DUPLICATE_KEY) {
+        await logDuplicateInbound(MessageSid, From);
+        return res.status(200).send("OK");
+      }
+      throw createError;
+    }
 
     const conversation = await Conversation.findOneAndUpdate(
       { contactId: contact._id },

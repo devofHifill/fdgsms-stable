@@ -13,6 +13,7 @@
 
 
 import SystemLog from "../models/SystemLog.js";
+import { escapeRegex } from "../utils/regex.js";
 
 export async function getSystemLogs(req, res) {
   try {
@@ -35,9 +36,12 @@ export async function getSystemLogs(req, res) {
     }
 
     if (search) {
+      // Match the text literally: a search like "(" is a broken pattern
+      // otherwise and the request fails.
+      const pattern = escapeRegex(search);
       query.$or = [
-        { event: { $regex: search, $options: "i" } },
-        { message: { $regex: search, $options: "i" } },
+        { event: { $regex: pattern, $options: "i" } },
+        { message: { $regex: pattern, $options: "i" } },
       ];
     }
 

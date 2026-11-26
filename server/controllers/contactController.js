@@ -15,10 +15,7 @@
 
 import mongoose from "mongoose";
 import Contact from "../models/Contact.js";
-
-function escapeRegex(value = "") {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+import { escapeRegex } from "../utils/regex.js";
 
 export async function getContacts(req, res) {
   try {
