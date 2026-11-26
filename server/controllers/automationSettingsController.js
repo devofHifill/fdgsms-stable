@@ -4,6 +4,7 @@ import {
   DEFAULT_ALLOWED_LINE_TYPES,
   normalizeLineType,
 } from "../services/phoneIntelligenceService.js";
+import { isValidTimeZone } from "../utils/timezone.js";
 
 export async function getAutomationSettings(req, res) {
   try {
@@ -33,7 +34,7 @@ export async function getAutomationSettings(req, res) {
 
 export async function updateAutomationSettings(req, res) {
   try {
-    const { enabled, sendingWindow, maxMessagesPerRun, allowedLineTypes } =
+    const { enabled, sendingWindow, timezone, maxMessagesPerRun, allowedLineTypes } =
       req.body;
 
     let item = await AutomationSettings.findOne({ key: "default" });
@@ -67,6 +68,16 @@ export async function updateAutomationSettings(req, res) {
         startHour,
         endHour,
       };
+    }
+
+    if (timezone !== undefined) {
+      const zone = String(timezone).trim();
+      if (!isValidTimeZone(zone)) {
+        return res.status(400).json({
+          message: `Unknown timezone "${zone}". Use an IANA name like America/New_York.`,
+        });
+      }
+      item.timezone = zone;
     }
 
     if (maxMessagesPerRun !== undefined) {
