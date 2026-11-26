@@ -13,22 +13,19 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 2  | "Yes" reply treated as opt-in, not a reply | 🔴 Critical | ✅ | `fix/yes-reply-not-opt-in` | [#45](https://github.com/devofHifill/fdgsms-stable/pull/45) → main [#47](https://github.com/devofHifill/fdgsms-stable/pull/47) |
 | 3  | AI replies can be sent twice (overlapping runs) | 🔴 Critical | 🧪 | `fix/worker-atomic-claim` | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
 | 4  | AI jobs stuck in "processing" forever | 🟠 High | 🧪 | `fix/worker-atomic-claim` (with #3) | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
-| 5  | AI sees oldest 50 messages, not newest | 🟠 High | ⬜ | `fix/ai-history-latest` | |
-| 6  | Sending window uses UTC, AI ignores it | 🟠 High | 🟨 | `fix/sending-window-timezone` | |
-| 7  | Uploaded contact files never deleted | 🟡 Medium | ⬜ | `fix/upload-file-cleanup` | |
-| 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | 🟨 | `fix/encrypt-twilio-token` | |
-| 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | ⬜ | `fix/login-hardening` | |
-| 10 | Client: sign out on expired login (401) | 🟡 Medium | ⬜ | `fix/client-401-logout` | |
-| 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | ⬜ | `fix/inbound-dedupe` | |
-| 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | ⬜ | `fix/opt-out-keywords` | |
-
-| 13 | Readable errors for bad/oversized uploads | 🟢 Low | ⬜ | `chore/error-handler` | |
-
-| 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
-
-| 15 | Remove hardcoded IP from CORS list | 🟢 Low | ⬜ | `chore/cleanup` | |
-| 16 | Remove dead commented code + stray root file | 🟢 Low | ⬜ | `chore/cleanup` (with #15) | |
-| 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | 🟨 | `fix/systemlog-ai-category` | |
+| 5  | AI sees oldest 50 messages, not newest | 🟠 High | 🧪 | `fix/ai-history-latest` | [#51](https://github.com/devofHifill/fdgsms-stable/pull/51) → staging |
+| 6  | Sending window uses UTC, AI ignores it | 🟠 High | 🧪 | `fix/sending-window-timezone` | [#60](https://github.com/devofHifill/fdgsms-stable/pull/60) → staging |
+| 7  | Uploaded contact files never deleted | 🟡 Medium | 🧪 | `fix/upload-file-cleanup` | [#52](https://github.com/devofHifill/fdgsms-stable/pull/52) → staging |
+| 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | 🧪 | `fix/encrypt-twilio-token` | [#58](https://github.com/devofHifill/fdgsms-stable/pull/58) → staging |
+| 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | 🧪 | `fix/login-hardening` | [#56](https://github.com/devofHifill/fdgsms-stable/pull/56) → staging |
+| 10 | Client: sign out on expired login (401) | 🟡 Medium | 🧪 | `fix/client-401-logout` | [#53](https://github.com/devofHifill/fdgsms-stable/pull/53) → staging |
+| 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | 🧪 | `fix/inbound-dedupe` | [#54](https://github.com/devofHifill/fdgsms-stable/pull/54) → staging |
+| 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | 🧪 | `fix/opt-out-keywords` | [#55](https://github.com/devofHifill/fdgsms-stable/pull/55) → staging |
+| 13 | Readable errors for bad/oversized uploads | 🟢 Low | 🧪 | `chore/error-handler` | [#59](https://github.com/devofHifill/fdgsms-stable/pull/59) → staging |
+| 14 | Escape Logs page search input | 🟢 Low | 🧪 | `chore/error-handler` (with #13) | [#59](https://github.com/devofHifill/fdgsms-stable/pull/59) → staging |
+| 15 | Remove hardcoded IP from CORS list | 🟢 Low | 🧪 | `chore/cleanup` | [#57](https://github.com/devofHifill/fdgsms-stable/pull/57) → staging |
+| 16 | Remove dead commented code + stray root file | 🟢 Low | 🧪 | `chore/cleanup` (with #15) | [#57](https://github.com/devofHifill/fdgsms-stable/pull/57) → staging |
+| 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | 🧪 | `fix/systemlog-ai-category` | [#50](https://github.com/devofHifill/fdgsms-stable/pull/50) → staging |
 
 
 **Progress:** 2 / 17 done
@@ -145,7 +142,7 @@ messages, including the one being answered.
 - Note: `buildMessages` sends only the last 10 of those to the model (`DEFAULT_MEMORY_DEPTH`),
   so the model saw 10 *old* messages before this fix and now sees the 10 newest.
 
-### 6. Sending window timezone — 🟠 High — ⏸ needs a decision
+### 6. Sending window timezone — 🟠 High — decided 2026-11-26: option A, AI answers anytime
 **Problem:** window uses server clock (UTC in Docker); 9–18 = ~4am–1pm Eastern. AI replies
 ignore the window entirely.
 **Decision needed:**
@@ -341,3 +338,5 @@ the IP:port address first.
 | Date | Fix | What happened |
 |------|-----|---------------|
 | 2026-11-10 | — | Plan created from code review |
+| 2026-11-26 | #3, #4 | Merged to staging in #48 |
+| 2026-11-26 | #5–#17 | All merged to staging in #50–#60; waiting for staging tests before main |
