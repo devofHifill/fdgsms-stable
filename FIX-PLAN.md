@@ -19,7 +19,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | ⬜ | `fix/encrypt-twilio-token` | |
 | 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | ⬜ | `fix/login-hardening` | |
 | 10 | Client: sign out on expired login (401) | 🟡 Medium | 🟨 | `fix/client-401-logout` | |
-| 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | ⬜ | `fix/inbound-dedupe` | |
+| 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | 🟨 | `fix/inbound-dedupe` | |
 | 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | ⬜ | `fix/opt-out-keywords` | |
 | 13 | Readable errors for bad/oversized uploads | 🟢 Low | ⬜ | `chore/error-handler` | |
 | 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
@@ -206,6 +206,18 @@ call itself).
 if found, return 200 and skip. Optionally a partial unique index on inbound `providerMessageSid`.
 **Files:** `server/controllers/webhookController.js`, maybe `server/models/SMSMessage.js`.
 **How to verify:** POST the same signed payload twice → one message, one AI job.
+
+**Done (on `fix/inbound-dedupe`):**
+- Inbound webhook looks up `MessageSid` first; a repeat answers `200` and is skipped (writes an
+  `inbound_sms_duplicate` info log).
+- Partial unique index `uniq_inbound_provider_sid` on inbound `providerMessageSid` (non-empty),
+  so two copies arriving at the same moment can't both save; the loser gets `200` too.
+  Outbound rows and rows without a sid are exempt.
+- Checked on a throwaway DB: same text twice → 1 message, unread +1; 3 at once → 1 message;
+  different text still saves.
+- Before deploying, check for old duplicates (they'd stop the index building; dedupe still works
+  via the lookup, mongoose just logs the index error):
+  `db.smsmessages.aggregate([{$match:{direction:"inbound",providerMessageSid:{$gt:""}}},{$group:{_id:"$providerMessageSid",n:{$sum:1}}},{$match:{n:{$gt:1}}}])`
 
 ### 12. Missing opt-out keywords — 🟡 Medium
 **Plan:** add `revoke`, and match `stop all` (with space) by collapsing spaces before lookup.
