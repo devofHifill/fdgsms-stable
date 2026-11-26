@@ -96,4 +96,20 @@ const smsMessageSchema = new mongoose.Schema(
   }
 );
 
+// One stored inbound message per Twilio MessageSid, so a webhook retry can't
+// be saved twice. Partial: outbound rows and rows without a sid are exempt.
+// If old duplicates already exist the index build fails (logged by mongoose)
+// and the webhook's lookup-before-save still dedupes new retries.
+smsMessageSchema.index(
+  { providerMessageSid: 1 },
+  {
+    name: "uniq_inbound_provider_sid",
+    unique: true,
+    partialFilterExpression: {
+      direction: "inbound",
+      providerMessageSid: { $type: "string", $gt: "" },
+    },
+  }
+);
+
 export default mongoose.model("SMSMessage", smsMessageSchema);

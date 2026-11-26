@@ -32,3 +32,24 @@ test("non-keyword replies are never opt-ins", () => {
 test("STOP is still classified as stop", () => {
   assert.equal(classifyInboundKeyword(" Stop. "), "stop");
 });
+
+test("REVOKE and spaced forms like STOP ALL / OPT OUT are opt-outs", () => {
+  for (const body of ["REVOKE", "revoke!", "STOP ALL", "stop  all", "Stopall", "opt out", "OPT OUT"]) {
+    assert.equal(classifyInboundKeyword(body), "stop", body);
+  }
+});
+
+test('"opt in" with a space is an opt-in keyword', () => {
+  assert.equal(classifyInboundKeyword("Opt in"), "start");
+});
+
+test("phrases that only contain a keyword are not opt-outs", () => {
+  for (const body of ["stop by later", "please don't stop", "the end", "cancel my 3pm?", "quit it lol"]) {
+    assert.equal(classifyInboundKeyword(body), "none", body);
+  }
+});
+
+test("blank messages are not keywords", () => {
+  assert.equal(classifyInboundKeyword("   "), "none");
+  assert.equal(classifyInboundKeyword(undefined), "none");
+});
