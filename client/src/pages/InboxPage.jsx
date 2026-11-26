@@ -1026,7 +1026,8 @@ export default function InboxPage() {
                             </span>
                           ) : null}
                           {item.message.direction === "outbound" &&
-                          FAILED_STATUSES.includes(item.message.status) ? (
+                          FAILED_STATUSES.includes(item.message.status) &&
+                          !item.message.metadata?.deliveryError?.permanent ? (
                             <button
                               type="button"
                               className="bubble-retry"
@@ -1036,6 +1037,16 @@ export default function InboxPage() {
                             </button>
                           ) : null}
                         </div>
+                        {item.message.direction === "outbound" &&
+                        FAILED_STATUSES.includes(item.message.status) &&
+                        (item.message.errorMessage || item.message.errorCode) ? (
+                          <div className="bubble-error" role="note">
+                            {item.message.errorMessage || `Twilio error ${item.message.errorCode}`}
+                            {item.message.metadata?.deliveryError?.permanent
+                              ? " · This number can't take texts, so retrying won't help."
+                              : ""}
+                          </div>
+                        ) : null}
                       </div>
                     )
                   )
