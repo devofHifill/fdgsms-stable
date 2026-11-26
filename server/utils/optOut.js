@@ -19,6 +19,7 @@ const STOP_KEYWORDS = new Set([
   "end",
   "quit",
   "optout",
+  "revoke",
 ]);
 
 // CTIA standard opt-in / resume keywords.
@@ -30,16 +31,16 @@ const START_KEYWORDS = new Set([
 ]);
 
 // Carriers match opt-out keywords case-insensitively when the keyword is the
-// entire message. We mirror that: trim, lowercase, drop surrounding whitespace
-// and trailing punctuation, then require an exact single-token match. This is
-// deliberately strict so phrases like "stop by later" are NOT treated as opt-outs.
+// entire message. We mirror that: trim, lowercase, drop trailing punctuation,
+// then remove spaces so "stop all" / "opt out" match "stopall" / "optout".
+// The whole message must still be the keyword, so phrases like
+// "stop by later" ("stopbylater") are NOT treated as opt-outs.
 function normalizeKeyword(body) {
   return String(body || "")
     .trim()
     .toLowerCase()
-    .replace(/[\s]+/g, " ")
     .replace(/[.!?,;:]+$/g, "")
-    .trim();
+    .replace(/\s+/g, "");
 }
 
 /**
