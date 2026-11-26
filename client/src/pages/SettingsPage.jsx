@@ -12,6 +12,32 @@ const LINE_TYPE_OPTIONS = [
   { value: "unknown", label: "Unknown" },
 ];
 
+// Timezone the campaign sending window hours are read in.
+const DEFAULT_TIMEZONE = "America/New_York";
+const TIMEZONE_OPTIONS = [
+  { value: "America/New_York", label: "Eastern (New York)" },
+  { value: "America/Chicago", label: "Central (Chicago)" },
+  { value: "America/Denver", label: "Mountain (Denver)" },
+  { value: "America/Phoenix", label: "Arizona (Phoenix, no DST)" },
+  { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
+  { value: "America/Anchorage", label: "Alaska (Anchorage)" },
+  { value: "Pacific/Honolulu", label: "Hawaii (Honolulu)" },
+  { value: "UTC", label: "UTC" },
+];
+
+function timeNowIn(timeZone) {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "numeric",
+      minute: "2-digit",
+      weekday: "short",
+    }).format(new Date());
+  } catch {
+    return "";
+  }
+}
+
 export default function SettingsPage() {
   const [form, setForm] = useState({
     enabled: true,
@@ -19,6 +45,7 @@ export default function SettingsPage() {
       startHour: 9,
       endHour: 18,
     },
+    timezone: DEFAULT_TIMEZONE,
     maxMessagesPerRun: 20,
     allowedLineTypes: ["mobile"],
   });
@@ -59,6 +86,7 @@ export default function SettingsPage() {
           startHour: Number(data.sendingWindow?.startHour ?? 9),
           endHour: Number(data.sendingWindow?.endHour ?? 18),
         },
+        timezone: data.timezone || DEFAULT_TIMEZONE,
         maxMessagesPerRun: Number(data.maxMessagesPerRun ?? 20),
         allowedLineTypes: Array.isArray(data.allowedLineTypes)
           ? data.allowedLineTypes
@@ -100,6 +128,7 @@ export default function SettingsPage() {
           startHour: Number(form.sendingWindow.startHour),
           endHour: Number(form.sendingWindow.endHour),
         },
+        timezone: form.timezone,
         maxMessagesPerRun: Number(form.maxMessagesPerRun),
         allowedLineTypes: form.allowedLineTypes,
       };
@@ -295,6 +324,31 @@ export default function SettingsPage() {
                   }
                 />
                 <span>Automation enabled</span>
+              </label>
+
+              <label className="field-block">
+                <span>Timezone</span>
+                <select
+                  value={form.timezone}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, timezone: e.target.value }))
+                  }
+                >
+                  {/* Keep a saved zone that isn't in the short list selectable. */}
+                  {TIMEZONE_OPTIONS.some((o) => o.value === form.timezone) ? null : (
+                    <option value={form.timezone}>{form.timezone}</option>
+                  )}
+                  {TIMEZONE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <small>
+                  Campaign texts only go out between the start and end hour in this
+                  timezone{timeNowIn(form.timezone) ? ` (now ${timeNowIn(form.timezone)})` : ""}.
+                  AI replies are not limited by these hours.
+                </small>
               </label>
 
               <div className="settings-grid">

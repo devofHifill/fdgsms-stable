@@ -13,6 +13,7 @@ import {
 } from "../services/phoneIntelligenceService.js";
 import { renderTemplate, buildContactTemplateVariables } from "../utils/template.js";
 import { singleFlight } from "../utils/singleFlight.js";
+import { isWithinSendingWindow } from "../utils/timezone.js";
 
 // While a step is being sent, the enrollment's nextSendAt is pushed this far
 // ahead so no other run (or server process) can pick the same step up. Every
@@ -59,34 +60,6 @@ function computeNextSendAtFromStep(step, baseDate = new Date()) {
   return new Date(baseDate.getTime() + delayHours * 60 * 60 * 1000);
 }
 
-function isWithinSendingWindow(now, sendingWindow) {
-  const startHour = Number(sendingWindow?.startHour ?? 9);
-  const endHour = Number(sendingWindow?.endHour ?? 18);
-
-  if (
-    Number.isNaN(startHour) ||
-    Number.isNaN(endHour) ||
-    startHour < 0 ||
-    startHour > 23 ||
-    endHour < 0 ||
-    endHour > 23
-  ) {
-    return true;
-  }
-
-  if (startHour === endHour) {
-    return true;
-  }
-
-  const currentHour = now.getHours();
-
-  if (startHour < endHour) {
-    return currentHour >= startHour && currentHour < endHour;
-  }
-
-  return currentHour >= startHour || currentHour < endHour;
-}
-
 async function getAutomationSettings() {
   let settings = await AutomationSettings.findOne({ key: "default" });
 
@@ -115,7 +88,9 @@ async function automationCycle() {
       return;
     }
 
-    if (!isWithinSendingWindow(now, settings.sendingWindow)) {
+    // The window is read in the account timezone (Settings page), not the
+    // server clock, which is UTC in Docker. AI replies are not limited by it.
+    if (!isWithinSendingWindow(now, settings.sendingWindow, settings.timezone)) {
       return;
     }
 

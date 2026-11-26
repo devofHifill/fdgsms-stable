@@ -14,7 +14,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 3  | AI replies can be sent twice (overlapping runs) | 🔴 Critical | 🧪 | `fix/worker-atomic-claim` | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
 | 4  | AI jobs stuck in "processing" forever | 🟠 High | 🧪 | `fix/worker-atomic-claim` (with #3) | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
 | 5  | AI sees oldest 50 messages, not newest | 🟠 High | ⬜ | `fix/ai-history-latest` | |
-| 6  | Sending window uses UTC, AI ignores it | 🟠 High | ⏸ | `fix/sending-window-timezone` | |
+| 6  | Sending window uses UTC, AI ignores it | 🟠 High | 🟨 | `fix/sending-window-timezone` | |
 | 7  | Uploaded contact files never deleted | 🟡 Medium | ⬜ | `fix/upload-file-cleanup` | |
 | 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | ⬜ | `fix/encrypt-twilio-token` | |
 | 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | ⬜ | `fix/login-hardening` | |
@@ -123,7 +123,7 @@ messages, including the one being answered.
 **Files:** `server/jobs/aiReplyWorker.js` (and check `aiAnalyticsController.js` test-reply path).
 **How to verify:** contact with 60+ messages → prompt includes the latest inbound.
 
-### 6. Sending window timezone — 🟠 High — ⏸ needs a decision
+### 6. Sending window timezone — 🟠 High — decided 2026-11-26: option A, AI answers anytime
 **Problem:** window uses server clock (UTC in Docker); 9–18 = ~4am–1pm Eastern. AI replies
 ignore the window entirely.
 **Decision needed:**
@@ -138,6 +138,19 @@ Settings UI.
 `server/controllers/automationSettingsController.js`, `client/src/pages/SettingsPage.jsx`,
 possibly `server/jobs/aiReplyWorker.js`.
 **How to verify:** set window to the current Eastern hour ±1 → sends inside, holds outside.
+
+**Done (on `fix/sending-window-timezone`):**
+- New `server/utils/timezone.js`: `isWithinSendingWindow(now, window, timeZone)` reads the hour
+  with `Intl.DateTimeFormat` (`hourCycle: "h23"`), so DST is handled; invalid zone → Eastern.
+- `AutomationSettings.timezone` (default `America/New_York`); the settings API validates it
+  (unknown zone → 400) and the campaign worker uses it. AI worker unchanged, per the decision.
+- Settings page: timezone picker (US zones + UTC) above Start/End Hour, showing the current time
+  in that zone and a note that AI replies aren't limited by the hours.
+- Checked: `server/tests/timezone.test.js` (winter/summer, Phoenix, wrap-around window, the old
+  UTC behaviour); in the browser: picker shows Eastern + current time, Central saves and stays
+  after reload; bad zone via API → 400.
+- ⚠️ On deploy, servers with no saved timezone switch from UTC to Eastern: a 9–18 window moves
+  from 4am–1pm Eastern to 9am–6pm Eastern. Check the hours on the Settings page after deploying.
 
 ### 7. Uploaded contact files never deleted — 🟡 Medium
 **Problem:** every preview leaves a CSV/XLSX full of PII in `uploads/`.
@@ -205,7 +218,7 @@ the IP:port address first.
 
 | Date | Fix | Decision |
 |------|-----|----------|
-| | #6 | _Pending: account timezone vs per-contact; AI quiet hours yes/no_ |
+| 2026-11-26 | #6 | A. One account timezone, set on the Settings page (default America/New_York). AI replies are NOT held by the window — they answer anytime, since the contact texted first. |
 
 ## Change log
 

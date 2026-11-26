@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { DEFAULT_TIMEZONE } from "../utils/timezone.js";
 
 const automationSettingsSchema = new mongoose.Schema(
   {
@@ -26,6 +27,12 @@ const automationSettingsSchema = new mongoose.Schema(
         min: 0,
         max: 23,
       },
+    },
+    // IANA zone the sending window hours are read in (e.g. America/New_York).
+    timezone: {
+      type: String,
+      default: DEFAULT_TIMEZONE,
+      trim: true,
     },
     maxMessagesPerRun: {
       type: Number,
