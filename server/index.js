@@ -22,6 +22,7 @@ import aiRoutes from "./routes/aiRoutes.js";
 import { runAutomationCycle } from "./jobs/automationWorker.js";
 import { runAiReplyCycle } from "./jobs/aiReplyWorker.js";
 import { encryptStoredTwilioToken } from "./services/twilioService.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
 
@@ -53,7 +54,9 @@ app.use(
         return callback(null, true);
       }
 
-      return callback(new Error(`CORS blocked for origin: ${origin}`));
+      const err = new Error(`CORS blocked for origin: ${origin}`);
+      err.statusCode = 403;
+      return callback(err);
     },
     credentials: true,
   })
@@ -81,6 +84,10 @@ app.use("/api/twilio-settings", twilioSettingsRoutes);
 app.use("/api/logs", systemLogRoutes);
 app.use("/api/templates", templateRoutes);
 app.use("/api/ai", aiRoutes);
+
+// Must stay last: turns upload, body-parser, CORS and unexpected errors into
+// JSON { message } the client can show.
+app.use(errorHandler);
 
 async function startServer() {
   await connectDB();

@@ -21,6 +21,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 10 | Client: sign out on expired login (401) | 🟡 Medium | ⬜ | `fix/client-401-logout` | |
 | 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | ⬜ | `fix/inbound-dedupe` | |
 | 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | ⬜ | `fix/opt-out-keywords` | |
+
 | 13 | Readable errors for bad/oversized uploads | 🟢 Low | ⬜ | `chore/error-handler` | |
 
 | 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
@@ -269,6 +270,23 @@ Keep the exact-whole-message rule so "stop by later" is still not an opt-out.
 `400 { message }` JSON, everything else into `500 { message }`.
 **Files:** `server/index.js`.
 **How to verify:** upload a `.pdf` or a 15 MB file → clear message in the UI.
+
+**Done (on `chore/error-handler`):**
+- New `server/middleware/errorHandler.js`, registered last in `index.js`: every unhandled error
+  becomes JSON `{ message }`, which the client already shows.
+  - Upload size/field errors → 400 ("File is too large. The limit is 10 MB.").
+  - Wrong file type (now tagged 400 in `uploadMiddleware.js`) → its own message.
+  - Broken JSON → 400; oversized body → 413; CORS rejection (now tagged 403) → 403.
+  - Anything else → 500 "Something went wrong on the server." (details only in the server log).
+- Checked: `server/tests/errorHandler.test.js`; and on the local API: `.pdf` → 400 file-type
+  message, 15 MB CSV → 400 size message, bad JSON → 400, unknown origin → 403, good CSV → 200.
+  Not clicked through the Upload page (the pane can't pick local files); the page shows `message`.
+
+**#14 done (same branch):**
+- `escapeRegex` moved to new `server/utils/regex.js`; used by the Contacts search (unchanged
+  behaviour) and now the Logs search, so text is matched literally.
+- Checked: `server/tests/regex.test.js`; local API: Logs search `(`, `a+`, `[` → normal empty
+  result instead of an error; `upload_preview` still finds entries; Contacts search `(` fine.
 
 ### 14. Escape Logs search — 🟢 Low (with #13)
 **Plan:** reuse the existing `escapeRegex` from `contactController.js` (move to `utils/`).
