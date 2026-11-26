@@ -17,7 +17,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 6  | Sending window uses UTC, AI ignores it | 🟠 High | ⏸ | `fix/sending-window-timezone` | |
 | 7  | Uploaded contact files never deleted | 🟡 Medium | ⬜ | `fix/upload-file-cleanup` | |
 | 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | ⬜ | `fix/encrypt-twilio-token` | |
-| 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | ⬜ | `fix/login-hardening` | |
+| 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | 🟨 | `fix/login-hardening` | |
 | 10 | Client: sign out on expired login (401) | 🟡 Medium | ⬜ | `fix/client-401-logout` | |
 | 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | ⬜ | `fix/inbound-dedupe` | |
 | 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | ⬜ | `fix/opt-out-keywords` | |
@@ -159,6 +159,21 @@ receives rows from the client, so the file isn't needed later). One-off: clear t
 15 min per IP, respecting `X-Forwarded-For` from Traefik); consider shorter token life (e.g. 1d).
 **Files:** `server/controllers/authController.js`, `server/routes/authRoutes.js`, `server/index.js` (`trust proxy`).
 **How to verify:** 11th wrong attempt → 429; correct login still works.
+
+**Done (on `fix/login-hardening`):**
+- Email and password compared with `crypto.timingSafeEqual` (over SHA-256, so length doesn't
+  leak); both always checked. Email is now case-insensitive.
+- `server/utils/attemptLimiter.js` (new), in memory: 10 failed logins per IP and 50 in total per
+  15 min → `429` with `Retry-After`. A successful login clears that IP. Lockout writes an
+  `auth` warn log (`login_rate_limited`).
+- `app.set("trust proxy", 1)` so `req.ip` is the real client behind Traefik.
+- Checked: `server/tests/loginLimit.test.js`; and on the local API: correct login 200, 10 wrong
+  → 401, 11th → 429, right password from that IP → 429, other IP still logs in.
+- Trade-offs: the global cap means a sustained attack can lock the real admin out for up to
+  15 min (better than unlimited guesses). Port `5000:4000` is published directly in
+  `docker-compose.yml`, bypassing Traefik, so `X-Forwarded-For` can be faked there — the global
+  cap still holds. Closing that port (or binding it to `127.0.0.1`) would be a good follow-up.
+- Token life not changed: still `JWT_EXPIRES_IN` (default `7d`), set per server in `.env`.
 
 ### 10. Client: sign out on expired login — 🟡 Medium
 **Plan:** in `apiFetch`, on `401` clear token/user and redirect to `/login` (skip for the login
