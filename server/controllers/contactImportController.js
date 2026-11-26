@@ -205,6 +205,12 @@ export async function uploadPreview(req, res) {
     return res.status(error.statusCode || 500).json({
       message: error.message || "Failed to generate upload preview",
     });
+  } finally {
+    // The file holds contact PII and isn't needed after parsing: the import
+    // step receives the rows back from the client, not from disk.
+    if (req.file?.path) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+    }
   }
 }
 
