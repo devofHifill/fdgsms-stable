@@ -13,19 +13,19 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 2  | "Yes" reply treated as opt-in, not a reply | 🔴 Critical | ✅ | `fix/yes-reply-not-opt-in` | [#45](https://github.com/devofHifill/fdgsms-stable/pull/45) → main [#47](https://github.com/devofHifill/fdgsms-stable/pull/47) |
 | 3  | AI replies can be sent twice (overlapping runs) | 🔴 Critical | 🧪 | `fix/worker-atomic-claim` | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
 | 4  | AI jobs stuck in "processing" forever | 🟠 High | 🧪 | `fix/worker-atomic-claim` (with #3) | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
-| 5  | AI sees oldest 50 messages, not newest | 🟠 High | ⬜ | `fix/ai-history-latest` | |
+| 5  | AI sees oldest 50 messages, not newest | 🟠 High | 🟨 | `fix/ai-history-latest` | |
 | 6  | Sending window uses UTC, AI ignores it | 🟠 High | ⏸ | `fix/sending-window-timezone` | |
-| 7  | Uploaded contact files never deleted | 🟡 Medium | ⬜ | `fix/upload-file-cleanup` | |
+| 7  | Uploaded contact files never deleted | 🟡 Medium | 🟨 | `fix/upload-file-cleanup` | |
 | 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | ⬜ | `fix/encrypt-twilio-token` | |
 | 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | ⬜ | `fix/login-hardening` | |
-| 10 | Client: sign out on expired login (401) | 🟡 Medium | ⬜ | `fix/client-401-logout` | |
+| 10 | Client: sign out on expired login (401) | 🟡 Medium | 🟨 | `fix/client-401-logout` | |
 | 11 | Ignore duplicate inbound texts (Twilio resends) | 🟡 Medium | 🟨 | `fix/inbound-dedupe` | |
 | 12 | Missing opt-out keywords ("stop all", "revoke") | 🟡 Medium | ⬜ | `fix/opt-out-keywords` | |
 | 13 | Readable errors for bad/oversized uploads | 🟢 Low | ⬜ | `chore/error-handler` | |
 | 14 | Escape Logs page search input | 🟢 Low | ⬜ | `chore/error-handler` (with #13) | |
 | 15 | Remove hardcoded IP from CORS list | 🟢 Low | ⬜ | `chore/cleanup` | |
 | 16 | Remove dead commented code + stray root file | 🟢 Low | ⬜ | `chore/cleanup` (with #15) | |
-| 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | ⬜ | `fix/systemlog-ai-category` | |
+| 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | 🟨 | `fix/systemlog-ai-category` | |
 
 **Progress:** 2 / 17 done
 
@@ -116,12 +116,29 @@ and is dropped with only a console line, so the AI Analytics page's activity lis
 **Plan:** add `"ai"` to the enum in `server/models/SystemLog.js`.
 **How to verify:** AI test reply or a skipped job → entry shows on the Logs page under AI.
 
+**Done (on `fix/systemlog-ai-category`):**
+- `"ai"` added to the `SystemLog.category` enum; it was the only category the server writes
+  that was missing.
+- Logs page category filter gets an "AI" option (`client/src/pages/LogsPage.jsx`).
+- Checked: `server/tests/systemLog.test.js` (ai and all other used categories pass, unknown still
+  rejected); locally, saving AI Settings now writes `ai_settings_updated`, shown under the AI filter.
+- AI logs from before this fix were never stored, so the AI history starts from the deploy.
+
 ### 5. AI sees oldest 50 messages — 🟠 High
 **Problem:** history query sorts oldest-first then `limit(50)` → long threads lose the latest
 messages, including the one being answered.
 **Plan:** sort newest-first, limit 50, then reverse to oldest-first before building the prompt.
 **Files:** `server/jobs/aiReplyWorker.js` (and check `aiAnalyticsController.js` test-reply path).
 **How to verify:** contact with 60+ messages → prompt includes the latest inbound.
+
+**Done (on `fix/ai-history-latest`):**
+- New `server/services/aiHistoryService.js` → `getRecentAiHistory(contactId)`: newest 50
+  (`createdAt` desc, `_id` tie-break), reversed to oldest-first.
+- Used by both the AI worker and the AI Analytics test-reply endpoint, which had the same bug.
+- Checked on a throwaway DB: 65-message thread → messages 16–65, latest inbound last and only
+  once in the prompt. The old query stopped at message 50.
+- Note: `buildMessages` sends only the last 10 of those to the model (`DEFAULT_MEMORY_DEPTH`),
+  so the model saw 10 *old* messages before this fix and now sees the 10 newest.
 
 ### 6. Sending window timezone — 🟠 High — ⏸ needs a decision
 **Problem:** window uses server clock (UTC in Docker); 9–18 = ~4am–1pm Eastern. AI replies
@@ -147,6 +164,16 @@ receives rows from the client, so the file isn't needed later). One-off: clear t
 **Files:** `server/controllers/contactImportController.js`.
 **How to verify:** run a preview → `uploads/` stays empty; import still works.
 
+**Done (on `fix/upload-file-cleanup`):**
+- `uploadPreview` deletes the uploaded file in a `finally`, on success and on every error path
+  (`readColumns` already did this).
+- Checked locally through the API with `sample.csv`: read columns, preview, and a preview that
+  fails on a bad mapping all leave `server/uploads/` empty. Import is untouched (it uses the rows
+  the client sends back).
+- One-off on each server: `uploads/` is not a Docker volume, so old files go when the server
+  container is recreated on deploy; a plain restart keeps them. Check after deploying:
+  `docker exec fdgsms-server ls uploads`.
+
 ### 8. Encrypt Twilio auth token — 🟡 Medium
 **Plan:** reuse `utils/secretBox.js` (`encryptSecret` on save, `decryptSecret` in
 `getActiveTwilioConfig`, `maskSecret` for display). Plaintext values keep working
@@ -165,6 +192,14 @@ receives rows from the client, so the file isn't needed later). One-off: clear t
 call itself).
 **Files:** `client/src/services/api.js`, maybe `client/src/context/AuthContext.jsx`.
 **How to verify:** put a bad token in localStorage → app returns to login page.
+
+**Done (on `fix/client-401-logout`):**
+- `apiFetch`: a `401` on a request that carried the token clears `token`/`user` and fires
+  `fdgsms:auth-expired`. The login call sends no token, so a wrong password just shows its error.
+- `AuthContext` listens and signs out; `ProtectedRoute` then shows `/login` (no full reload).
+- Only `requireAuth` and login return 401 on the server, so nothing else triggers it.
+- Checked in the browser: bad token on `/contacts` → `/login` with storage cleared; wrong
+  password → "Invalid email or password", stays on login; correct login → dashboard.
 
 ### 11. Ignore duplicate inbound texts — 🟡 Medium
 **Plan:** before saving, check for an existing inbound message with the same `MessageSid`;
