@@ -96,15 +96,28 @@ export async function lookupPhoneNumber(to) {
   };
 }
 
+// Where Twilio reports each message's final status (delivered / undelivered /
+// failed + error code). Needs the public https origin, so it is left out
+// locally where Twilio couldn't reach us anyway.
+export function getStatusCallbackUrl() {
+  const base = String(process.env.PUBLIC_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(base)) return "";
+  return `${base}/api/webhooks/twilio/status`;
+}
+
 export async function sendSMS({ to, body }) {
   const config = await getActiveTwilioConfig();
   const client = clientFromConfig(config);
+
+  const statusCallback = getStatusCallbackUrl();
+  const extra = statusCallback ? { statusCallback } : {};
 
   if (config.messagingServiceSid) {
     return await client.messages.create({
       messagingServiceSid: config.messagingServiceSid,
       to,
       body,
+      ...extra,
     });
   }
 
@@ -116,5 +129,6 @@ export async function sendSMS({ to, body }) {
     from: config.phoneNumber,
     to,
     body,
+    ...extra,
   });
 }

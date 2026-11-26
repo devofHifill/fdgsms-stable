@@ -26,9 +26,10 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 15 | Remove hardcoded IP from CORS list | 🟢 Low | ✅ | `chore/cleanup` | [#57](https://github.com/devofHifill/fdgsms-stable/pull/57) → staging → main [#62](https://github.com/devofHifill/fdgsms-stable/pull/62) |
 | 16 | Remove dead commented code + stray root file | 🟢 Low | ✅ | `chore/cleanup` (with #15) | [#57](https://github.com/devofHifill/fdgsms-stable/pull/57) → staging → main [#62](https://github.com/devofHifill/fdgsms-stable/pull/62) |
 | 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | ✅ | `fix/systemlog-ai-category` | [#50](https://github.com/devofHifill/fdgsms-stable/pull/50) → staging → main [#62](https://github.com/devofHifill/fdgsms-stable/pull/62) |
+| 18 | Twilio delivery errors (30006/30007…) not recorded or shown | 🟠 High | 🟨 | `fix/twilio-delivery-status` | |
 
 
-**Progress:** 17 / 17 done — all on `main` and checked on live (2026-11-26)
+**Progress:** 17 / 18 done
 
 ---
 
@@ -324,6 +325,26 @@ the IP:port address first.
   "new twilio" line and blank lines, so nothing to merge.
 - Checked locally: API starts, local site logs in (CORS 200), the IP origin is refused, tests pass.
   The refusal shows as 500 on this branch and becomes 403 once #13's error handler is merged.
+
+### 18. Twilio delivery errors not recorded — 🟠 High (added 2026-11-26)
+**Problem:** sends never told Twilio where to report the final status, so every message stayed
+"accepted": 30006/30007 etc. were only visible in the Twilio console, the Inbox never showed
+them, and campaigns kept texting numbers that can't receive SMS.
+**Done (on `fix/twilio-delivery-status`):**
+- `sendSMS` passes `statusCallback` = `PUBLIC_BASE_URL` + `/api/webhooks/twilio/status` (https only;
+  left out locally). Compose already sets `PUBLIC_BASE_URL` to `https://APP_DOMAIN`.
+- New `server/utils/twilioErrors.js`: plain-language label per code + permanent / dead-number flags.
+- Status webhook: status only moves forward (late out-of-order callbacks ignored); saves
+  `errorCode`, readable `errorMessage` and `metadata.deliveryError`; logs `sms_delivery_failed` once.
+- Permanent errors (30004, 30005, 30006, 21211, 21610, 21614): stop the contact's active
+  enrollments (`undeliverable_<code>`); dead numbers (30005, 30006, 21211, 21614) → contact
+  `invalid` (never overrides `opted_out`). Temporary ones (30003, 30007, 30008, …) are only recorded.
+- Inbox: failed bubbles show the readable error; Retry hidden when the error is permanent.
+- Checked: `server/tests/twilioErrors.test.js`; throwaway-DB run (30006 → stopped + invalid,
+  30007 → recorded only, late `sent` ignored, repeat callback logged once, opted-out kept);
+  local Inbox shows both error lines, Retry only on the temporary one.
+- Not checked against real Twilio yet: on staging/live send one text and confirm it moves to
+  `delivered` (or shows the error).
 
 ---
 
