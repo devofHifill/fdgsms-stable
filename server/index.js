@@ -25,6 +25,9 @@ import { runAiReplyCycle } from "./jobs/aiReplyWorker.js";
 dotenv.config();
 
 const app = express();
+// One proxy hop (Traefik) sits in front in production, so req.ip is the real
+// client from X-Forwarded-For — the login attempt limit keys on it.
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 4000;
 const AUTOMATION_INTERVAL_MS = 60000;
 // Shorter than automation so replies feel timely; the interval also doubles as
