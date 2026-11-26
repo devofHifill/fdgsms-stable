@@ -13,7 +13,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 2  | "Yes" reply treated as opt-in, not a reply | 🔴 Critical | ✅ | `fix/yes-reply-not-opt-in` | [#45](https://github.com/devofHifill/fdgsms-stable/pull/45) → main [#47](https://github.com/devofHifill/fdgsms-stable/pull/47) |
 | 3  | AI replies can be sent twice (overlapping runs) | 🔴 Critical | 🧪 | `fix/worker-atomic-claim` | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
 | 4  | AI jobs stuck in "processing" forever | 🟠 High | 🧪 | `fix/worker-atomic-claim` (with #3) | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
-| 5  | AI sees oldest 50 messages, not newest | 🟠 High | ⬜ | `fix/ai-history-latest` | |
+| 5  | AI sees oldest 50 messages, not newest | 🟠 High | 🟨 | `fix/ai-history-latest` | |
 | 6  | Sending window uses UTC, AI ignores it | 🟠 High | ⏸ | `fix/sending-window-timezone` | |
 | 7  | Uploaded contact files never deleted | 🟡 Medium | ⬜ | `fix/upload-file-cleanup` | |
 | 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | ⬜ | `fix/encrypt-twilio-token` | |
@@ -122,6 +122,15 @@ messages, including the one being answered.
 **Plan:** sort newest-first, limit 50, then reverse to oldest-first before building the prompt.
 **Files:** `server/jobs/aiReplyWorker.js` (and check `aiAnalyticsController.js` test-reply path).
 **How to verify:** contact with 60+ messages → prompt includes the latest inbound.
+
+**Done (on `fix/ai-history-latest`):**
+- New `server/services/aiHistoryService.js` → `getRecentAiHistory(contactId)`: newest 50
+  (`createdAt` desc, `_id` tie-break), reversed to oldest-first.
+- Used by both the AI worker and the AI Analytics test-reply endpoint, which had the same bug.
+- Checked on a throwaway DB: 65-message thread → messages 16–65, latest inbound last and only
+  once in the prompt. The old query stopped at message 50.
+- Note: `buildMessages` sends only the last 10 of those to the model (`DEFAULT_MEMORY_DEPTH`),
+  so the model saw 10 *old* messages before this fix and now sees the 10 newest.
 
 ### 6. Sending window timezone — 🟠 High — ⏸ needs a decision
 **Problem:** window uses server clock (UTC in Docker); 9–18 = ~4am–1pm Eastern. AI replies
