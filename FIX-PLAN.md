@@ -15,7 +15,7 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 4  | AI jobs stuck in "processing" forever | 🟠 High | 🧪 | `fix/worker-atomic-claim` (with #3) | [#48](https://github.com/devofHifill/fdgsms-stable/pull/48) → staging |
 | 5  | AI sees oldest 50 messages, not newest | 🟠 High | 🟨 | `fix/ai-history-latest` | |
 | 6  | Sending window uses UTC, AI ignores it | 🟠 High | ⏸ | `fix/sending-window-timezone` | |
-| 7  | Uploaded contact files never deleted | 🟡 Medium | ⬜ | `fix/upload-file-cleanup` | |
+| 7  | Uploaded contact files never deleted | 🟡 Medium | 🟨 | `fix/upload-file-cleanup` | |
 | 8  | Encrypt Twilio auth token in the DB | 🟡 Medium | ⬜ | `fix/encrypt-twilio-token` | |
 | 9  | Login hardening (attempt limit, safe compare) | 🟡 Medium | ⬜ | `fix/login-hardening` | |
 | 10 | Client: sign out on expired login (401) | 🟡 Medium | ⬜ | `fix/client-401-logout` | |
@@ -163,6 +163,16 @@ receives rows from the client, so the file isn't needed later). One-off: clear t
 `uploads/` folder on each server.
 **Files:** `server/controllers/contactImportController.js`.
 **How to verify:** run a preview → `uploads/` stays empty; import still works.
+
+**Done (on `fix/upload-file-cleanup`):**
+- `uploadPreview` deletes the uploaded file in a `finally`, on success and on every error path
+  (`readColumns` already did this).
+- Checked locally through the API with `sample.csv`: read columns, preview, and a preview that
+  fails on a bad mapping all leave `server/uploads/` empty. Import is untouched (it uses the rows
+  the client sends back).
+- One-off on each server: `uploads/` is not a Docker volume, so old files go when the server
+  container is recreated on deploy; a plain restart keeps them. Check after deploying:
+  `docker exec fdgsms-server ls uploads`.
 
 ### 8. Encrypt Twilio auth token — 🟡 Medium
 **Plan:** reuse `utils/secretBox.js` (`encryptSecret` on save, `decryptSecret` in
