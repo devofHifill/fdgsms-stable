@@ -10,6 +10,7 @@ import SMSMessage from "../models/SMSMessage.js";
 import Contact from "../models/Contact.js";
 import { getAiSettings } from "../services/aiReplyService.js";
 import { generateAiReply } from "../services/aiReplyGenerator.js";
+import { getRecentAiHistory } from "../services/aiHistoryService.js";
 
 // GET /api/ai/analytics?days=30
 export async function getAiAnalytics(req, res) {
@@ -98,11 +99,7 @@ export async function testAiReply(req, res) {
     let history = [];
     if (contactId && mongoose.isValidObjectId(contactId)) {
       contact = (await Contact.findById(contactId).lean()) || {};
-      history = await SMSMessage.find({ contactId })
-        .sort({ createdAt: 1 })
-        .limit(50)
-        .select("direction body")
-        .lean();
+      history = await getRecentAiHistory(contactId);
     }
 
     const reply = await generateAiReply({

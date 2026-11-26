@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { AUTH_EXPIRED_EVENT } from "../services/api";
 
 const AuthContext = createContext(null);
 
@@ -34,6 +35,17 @@ export function AuthProvider({ children }) {
     setToken("");
     setUser(null);
   };
+
+  // Any API call that gets a 401 for our token signs us out; ProtectedRoute
+  // then redirects to /login.
+  useEffect(() => {
+    const onExpired = () => {
+      setToken("");
+      setUser(null);
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+  }, []);
 
   const value = useMemo(
     () => ({
