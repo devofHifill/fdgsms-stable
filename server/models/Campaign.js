@@ -39,6 +39,13 @@ const campaignSchema = new mongoose.Schema(
       value: { type: Number, default: 30, min: 0 },
       unit: { type: String, enum: ["seconds", "minutes", "hours"], default: "seconds" },
     },
+    // Campaign plan C3: start new contacts (step 1) until this many step-1
+    // texts are delivered today. null = no daily target.
+    dailyStep1Target: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
     // When this campaign last sent a text (claimed atomically before sending).
     lastCampaignSendAt: {
       type: Date,

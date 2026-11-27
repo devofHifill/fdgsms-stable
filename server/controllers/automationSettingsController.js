@@ -6,6 +6,7 @@ import {
 } from "../services/phoneIntelligenceService.js";
 import { isValidTimeZone } from "../utils/timezone.js";
 import { parseGap, GAP_FLOOR_MS } from "../utils/campaignGap.js";
+import { dayStart, countPlatformSentToday } from "../services/dailyLimitService.js";
 
 export async function getAutomationSettings(req, res) {
   try {
@@ -24,7 +25,10 @@ export async function getAutomationSettings(req, res) {
       });
     }
 
-    return res.status(200).json(item);
+    // Campaign plan C3: how many texts went out today (platform limit).
+    const since = dayStart(new Date(), item.timezone);
+    const todaySmsCount = await countPlatformSentToday(since);
+    return res.status(200).json({ ...item.toObject(), todaySmsCount, todayStartsAt: since });
   } catch (error) {
     console.error("getAutomationSettings error:", error);
     return res.status(500).json({
@@ -44,6 +48,7 @@ export async function updateAutomationSettings(req, res) {
       autoPause,
       doNotTextList,
       minCampaignGap,
+      platformDailySmsLimit,
     } = req.body;
 
     let item = await AutomationSettings.findOne({ key: "default" });
@@ -77,6 +82,21 @@ export async function updateAutomationSettings(req, res) {
         startHour,
         endHour,
       };
+    }
+
+    // Campaign plan C3 (Q4/Q12): platform daily SMS limit. Empty = no limit.
+    if (platformDailySmsLimit !== undefined) {
+      if (platformDailySmsLimit === null || platformDailySmsLimit === "") {
+        item.platformDailySmsLimit = null;
+      } else {
+        const n = Number(platformDailySmsLimit);
+        if (!Number.isInteger(n) || n < 1 || n > 1000000) {
+          return res.status(400).json({
+            message: "Platform daily SMS limit must be a whole number of at least 1, or empty for no limit",
+          });
+        }
+        item.platformDailySmsLimit = n;
+      }
     }
 
     // Campaign plan C2 (Q3b): minimum gap between campaign texts, ≥ 5 s.

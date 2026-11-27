@@ -100,6 +100,10 @@ const smsMessageSchema = new mongoose.Schema(
 // be saved twice. Partial: outbound rows and rows without a sid are exempt.
 // If old duplicates already exist the index build fails (logged by mongoose)
 // and the webhook's lookup-before-save still dedupes new retries.
+// Campaign plan C3: today's counts (platform limit, step-1 target).
+smsMessageSchema.index({ direction: 1, createdAt: -1 });
+smsMessageSchema.index({ campaignId: 1, stepNumber: 1, createdAt: -1 });
+
 smsMessageSchema.index(
   { providerMessageSid: 1 },
   {

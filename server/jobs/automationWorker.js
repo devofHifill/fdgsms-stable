@@ -23,6 +23,13 @@ import {
 } from "../services/campaignDeliveryService.js";
 import { isWithinSendingWindow } from "../utils/timezone.js";
 import { effectiveGapMs } from "../utils/campaignGap.js";
+import {
+  dayStart,
+  platformLimitOf,
+  countPlatformSentToday,
+  countStep1Today,
+  step1Room,
+} from "../services/dailyLimitService.js";
 
 // While a step is being sent, the enrollment's nextSendAt is pushed this far
 // ahead so no other run (or server process) can pick the same step up. Every
@@ -54,6 +61,20 @@ const PER_CAMPAIGN_SCAN = 25;
 // The delivery sweep doesn't need to run on every few-second tick.
 const SWEEP_EVERY_MS = 60 * 1000;
 let lastSweepAt = 0;
+let lastPlatformLimitLogDay = 0;
+
+// Log "platform daily limit reached" once per day, not every 5 s.
+async function logPlatformLimitOnce(since, limit) {
+  if (lastPlatformLimitLogDay === since.getTime()) return;
+  lastPlatformLimitLogDay = since.getTime();
+  await createSystemLog({
+    level: "warn",
+    category: "automation",
+    event: "platform_daily_limit_reached",
+    message: `Platform daily SMS limit reached (${limit}). Campaign texts resume tomorrow; manual texts and AI replies still go out.`,
+    metadata: { limit, dayStart: since },
+  });
+}
 
 export function gapNotElapsed(campaign, gapMs, now = new Date()) {
   const last = campaign?.lastCampaignSendAt ? new Date(campaign.lastCampaignSendAt).getTime() : 0;
@@ -157,6 +178,24 @@ async function automationCycle() {
     const dueFilter = { status: "active", nextSendAt: { $ne: null, $lte: now } };
     const minGap = settings.minCampaignGap;
     const dueCampaignIds = await Enrollment.distinct("campaignId", dueFilter);
+    if (!dueCampaignIds.length) return;
+
+    // Campaign plan C3: platform daily SMS limit (all texts today count;
+    // only campaign texts stop at it) and follow-ups-first near the limit.
+    const since = dayStart(now, settings.timezone);
+    const platformLimit = platformLimitOf(settings);
+    let platformRemaining =
+      platformLimit === null ? Infinity : platformLimit - (await countPlatformSentToday(since));
+    if (platformRemaining <= 0) {
+      await logPlatformLimitOnce(since, platformLimit);
+      return;
+    }
+    // Keep enough of the day's remaining texts for follow-ups that are due,
+    // so people already in a sequence aren't left hanging (Q4c).
+    const followUpsDue =
+      platformRemaining === Infinity
+        ? 0
+        : await Enrollment.countDocuments({ ...dueFilter, currentStep: { $gt: 1 } });
     const campaignsById = new Map(
       (await Campaign.find({ _id: { $in: dueCampaignIds } })).map((c) => [String(c._id), c])
     );
@@ -171,9 +210,45 @@ async function automationCycle() {
       const gapMs = campaignDoc ? effectiveGapMs(campaignDoc.gap, minGap) : 0;
       if (gapNotElapsed(campaignDoc, gapMs, now)) continue;
 
-      const enrollments = await Enrollment.find({ ...dueFilter, campaignId: dueCampaignId })
-        .sort({ nextSendAt: 1, createdAt: 1 })
-        .limit(campaignDoc ? PER_CAMPAIGN_SCAN : 500);
+      if (platformRemaining <= 0) break;
+
+      let enrollments;
+      if (!campaignDoc) {
+        // Deleted campaign: its contacts are stopped below.
+        enrollments = await Enrollment.find({ ...dueFilter, campaignId: dueCampaignId }).limit(500);
+      } else {
+        const firstStepNumber = Number(getSortedSteps(campaignDoc)[0]?.stepNumber ?? 1);
+        // Follow-ups first (Q4c), then new contacts (step 1).
+        const followUps = await Enrollment.find({
+          ...dueFilter,
+          campaignId: dueCampaignId,
+          currentStep: { $ne: firstStepNumber },
+        })
+          .sort({ nextSendAt: 1, createdAt: 1 })
+          .limit(PER_CAMPAIGN_SCAN);
+
+        // Step 1 only while the campaign's daily target has room and the
+        // platform limit isn't needed for follow-ups.
+        let newContacts = [];
+        if (platformRemaining > followUpsDue) {
+          const room = campaignDoc.dailyStep1Target
+            ? step1Room(
+                campaignDoc.dailyStep1Target,
+                await countStep1Today(campaignDoc._id, firstStepNumber, since, now)
+              )
+            : Infinity;
+          if (room > 0) {
+            newContacts = await Enrollment.find({
+              ...dueFilter,
+              campaignId: dueCampaignId,
+              currentStep: firstStepNumber,
+            })
+              .sort({ nextSendAt: 1, createdAt: 1 })
+              .limit(PER_CAMPAIGN_SCAN);
+          }
+        }
+        enrollments = [...followUps, ...newContacts];
+      }
 
       // Becomes true once this campaign has used its slot (or lost it to
       // another run); the remaining contacts wait for the next gap.
@@ -608,6 +683,7 @@ async function automationCycle() {
         });
       }
     }
+      if (campaignDone) platformRemaining -= 1;
     }
   } catch (error) {
     console.error("runAutomationCycle fatal error:", error);

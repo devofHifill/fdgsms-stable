@@ -18,6 +18,7 @@ import Enrollment from "../models/Enrollment.js";
 import SMSMessage from "../models/SMSMessage.js";
 import { NO_REPORT_AFTER_MS } from "../services/campaignDeliveryService.js";
 import AutomationSettings from "../models/AutomationSettings.js";
+import { dayStart, countStep1Today, step1Room } from "../services/dailyLimitService.js";
 import {
   parseGap,
   gapToMs,
@@ -34,6 +35,17 @@ function normalizeSteps(steps = []) {
   }));
 }
 
+// Campaign plan C3: step-1 delivered per day. Empty / null = no target.
+function parseDailyTarget(input) {
+  if (input === undefined) return { value: undefined };
+  if (input === null || input === "") return { value: null };
+  const n = Number(input);
+  if (!Number.isInteger(n) || n < 1 || n > 100000) {
+    return { error: "Daily target must be a whole number from 1 to 100,000, or empty for no target" };
+  }
+  return { value: n };
+}
+
 // Campaign plan C2: the campaign's gap must not be shorter than the Settings
 // minimum gap (itself never below 5 s). Returns { gap } or { error }.
 async function validateCampaignGap(input) {
@@ -44,10 +56,14 @@ async function validateCampaignGap(input) {
 
 export async function createCampaign(req, res) {
   try {
-    const { name, isActive, steps, gap } = req.body;
+    const { name, isActive, steps, gap, dailyStep1Target } = req.body;
 
     if (!name || !Array.isArray(steps) || !steps.length) {
       return res.status(400).json({ message: "Invalid campaign data" });
+    }
+
+    if (parseDailyTarget(dailyStep1Target).error) {
+      return res.status(400).json({ message: parseDailyTarget(dailyStep1Target).error });
     }
 
     let campaignGap = DEFAULT_CAMPAIGN_GAP;
@@ -62,6 +78,7 @@ export async function createCampaign(req, res) {
       isActive: typeof isActive === "boolean" ? isActive : true,
       steps: normalizeSteps(steps),
       gap: campaignGap,
+      dailyStep1Target: parseDailyTarget(dailyStep1Target).value ?? null,
     });
 
     res.json(campaign);
@@ -85,8 +102,14 @@ export async function updateCampaign(req, res) {
       return res.status(400).json({ message: "Invalid campaign id" });
     }
 
-    const { name, isActive, steps, gap } = req.body;
+    const { name, isActive, steps, gap, dailyStep1Target } = req.body;
     const update = {};
+
+    if (dailyStep1Target !== undefined) {
+      const checked = parseDailyTarget(dailyStep1Target);
+      if (checked.error) return res.status(400).json({ message: checked.error });
+      update.dailyStep1Target = checked.value;
+    }
 
     if (gap !== undefined) {
       const checked = await validateCampaignGap(gap);
@@ -289,6 +312,25 @@ export async function getCampaignStats(req, res) {
       const finished = s.delivered + s.undelivered;
       s.deliveryRate = finished ? Math.round((s.delivered / finished) * 100) : 0;
     }
+
+    // Campaign plan C3: today's step-1 progress against each daily target.
+    const settings = await AutomationSettings.findOne({ key: "default" }).lean();
+    const since = dayStart(new Date(), settings?.timezone);
+    const campaigns = await Campaign.find({}, { steps: 1, dailyStep1Target: 1 }).lean();
+    await Promise.all(
+      campaigns.map(async (c) => {
+        const id = String(c._id);
+        const first = Number([...(c.steps || [])].sort((a, b) => a.stepNumber - b.stepNumber)[0]?.stepNumber ?? 1);
+        const today = await countStep1Today(c._id, first, since);
+        if (!stats[id]) stats[id] = blank();
+        stats[id].today = {
+          step1Delivered: today.delivered,
+          step1Waiting: today.waiting,
+          target: c.dailyStep1Target ?? null,
+          room: c.dailyStep1Target ? step1Room(c.dailyStep1Target, today) : null,
+        };
+      })
+    );
 
     return res.json({ stats });
   } catch (error) {

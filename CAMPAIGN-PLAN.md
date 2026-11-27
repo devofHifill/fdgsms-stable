@@ -14,13 +14,13 @@ undelivered / failed + error code).
 |----|-------|----------------|--------|--------|----|
 | C1 | Undelivered rules | Step 1 / later-step undelivered → excluded; do-not-text list (all campaigns, Settings block/warn for manual + AI, import skip, manual removal); auto-pause after N in a row (Settings on/off + N); "no report" after 15 min, 24 h late-report window; delivered counts | ✅ | `feat/campaign-undelivered-rules` | [#71](https://github.com/devofHifill/fdgsms-stable/pull/71) → staging → main [#72](https://github.com/devofHifill/fdgsms-stable/pull/72) |
 | C2 | Message gap | Per-campaign gap (s / min / h) replaces Max Messages Per Run; Settings minimum gap (≥ 5 s); existing campaigns start at 30 s | ✅ | `feat/campaign-message-gap` | [#73](https://github.com/devofHifill/fdgsms-stable/pull/73) → main |
-| C3 | Daily targets | Per-campaign step-1 delivered target; platform daily SMS limit in Settings (starts at 2,000; manual + AI count but never blocked); follow-ups first near the limit | ⬜ | `feat/campaign-daily-target` | |
+| C3 | Daily targets | Per-campaign step-1 delivered target; platform daily SMS limit in Settings (starts at 2,000; manual + AI count but never blocked); follow-ups first near the limit | 🟨 | `feat/campaign-daily-target` | built 2026-11-27, not merged yet |
 | C4 | Schedule | Sending days; start date; end rules (days / weeks / date / until contacts run out, whichever first); per-step start (after previous or fixed "not before" date + minimum wait); Finishing → Completed; add contacts while running | ⬜ | `feat/campaign-schedule` | |
 | C5 | Pause / Stop | Separate Pause and Stop buttons; Stop toggle soft-deletes contacts who never got step 1 (keeps ones in other campaigns or with history) | ⬜ | `feat/campaign-stop-cleanup` | |
 | C6 | Campaign report | Per step / per day counts, top error codes, estimated finish, cost per campaign from message prices | ⬜ | `feat/campaign-report` | |
 | C7 | Twilio spend | Account spend today / this month on the Dashboard (SMS, lookups, number rental) | ⬜ | `feat/twilio-spend` | |
 
-**Progress:** 2 / 7 done · C1 live 2026-11-27 (2-step test: step 1 delivered in 4 s, step 2 sent 5 min after delivery) · C2 live 2026-11-27 (13 campaigns set to 30 s; pacing tested with the real worker on a throwaway DB, not with live texts)
+**Progress:** 2 / 7 done · C1 live 2026-11-27 (2-step test: step 1 delivered in 4 s, step 2 sent 5 min after delivery) · C2 live 2026-11-27 (13 campaigns set to 30 s; pacing tested with the real worker on a throwaway DB, not with live texts) · C3 built and tested locally
 
 ---
 

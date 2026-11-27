@@ -29,6 +29,7 @@ export default function SettingsPage() {
     timezone: DEFAULT_TIMEZONE,
     allowedLineTypes: ["mobile"],
     minCampaignGap: { value: 5, unit: "seconds" },
+    platformDailySmsLimit: 2000,
     autoPause: { enabled: true, afterUndeliveredInARow: 10 },
     doNotTextList: { manual: "warn", ai: "warn" },
   });
@@ -50,6 +51,7 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState("");
 
   const [twilioSaving, setTwilioSaving] = useState(false);
+  const [todaySmsCount, setTodaySmsCount] = useState(0);
   const [twilioError, setTwilioError] = useState("");
   const [twilioSuccess, setTwilioSuccess] = useState("");
 
@@ -74,6 +76,7 @@ export default function SettingsPage() {
           value: Number(data.minCampaignGap?.value ?? 5),
           unit: data.minCampaignGap?.unit || "seconds",
         },
+        platformDailySmsLimit: data.platformDailySmsLimit ?? "",
         allowedLineTypes: Array.isArray(data.allowedLineTypes)
           ? data.allowedLineTypes
           : ["mobile"],
@@ -86,6 +89,8 @@ export default function SettingsPage() {
           ai: data.doNotTextList?.ai === "block" ? "block" : "warn",
         },
       });
+
+      setTodaySmsCount(Number(data.todaySmsCount) || 0);
 
       setTwilio({
         accountSid: twilioData.accountSid || "",
@@ -127,6 +132,8 @@ export default function SettingsPage() {
           value: Number(form.minCampaignGap.value),
           unit: form.minCampaignGap.unit,
         },
+        platformDailySmsLimit:
+          String(form.platformDailySmsLimit).trim() === "" ? null : Number(form.platformDailySmsLimit),
         allowedLineTypes: form.allowedLineTypes,
         autoPause: {
           enabled: form.autoPause.enabled,
@@ -432,6 +439,25 @@ export default function SettingsPage() {
                     below 5 seconds.
                   </small>
                 </div>
+
+                <label className="field-block">
+                  <span>Platform daily SMS limit</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="No limit"
+                    value={form.platformDailySmsLimit}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, platformDailySmsLimit: e.target.value }))
+                    }
+                  />
+                  <small className="muted">
+                    Most texts sent per day (your 10DLC limit), counting campaign, manual and AI
+                    texts. At the limit only campaign texts stop; follow-ups go before new
+                    contacts. Today: {todaySmsCount.toLocaleString()} sent.
+                  </small>
+                </label>
               </div>
 
               <div className="field-block">
