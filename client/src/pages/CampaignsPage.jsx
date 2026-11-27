@@ -10,6 +10,27 @@ function createEmptyStep(stepNumber = 1) {
   };
 }
 
+// Campaign plan C2: gap between two texts of a campaign.
+const DEFAULT_GAP = { value: 30, unit: "seconds" };
+const GAP_MS = { seconds: 1000, minutes: 60000, hours: 3600000 };
+
+function gapMs(gap) {
+  return (Number(gap?.value) || 0) * (GAP_MS[gap?.unit] || 1000);
+}
+
+function formatGap(gap) {
+  const v = Number(gap?.value) || 0;
+  const unit = GAP_MS[gap?.unit] ? gap.unit : "seconds";
+  return `${v} ${v === 1 ? unit.slice(0, -1) : unit}`;
+}
+
+// "1 text every 30 seconds · up to 1,440 a day in the sending window"
+function paceText(gap, pace) {
+  const ms = Math.max(gapMs(gap), gapMs(pace.minGap), 5000);
+  const perDay = Math.floor((pace.windowHours * 3600000) / ms);
+  return `1 text every ${formatGap(gap)} · up to ${perDay.toLocaleString()} a day in the sending window`;
+}
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState([]);
   const [stats, setStats] = useState({});
@@ -24,7 +45,10 @@ export default function CampaignsPage() {
     name: "",
     isActive: true,
     steps: [createEmptyStep(1)],
+    gap: { ...DEFAULT_GAP },
   });
+  // Settings needed to explain the gap: minimum gap + sending window length.
+  const [pace, setPace] = useState({ minGap: { value: 5, unit: "seconds" }, windowHours: 12 });
 
   // Enroll-contacts modal state
   const [enrollFor, setEnrollFor] = useState(null);
@@ -61,6 +85,14 @@ export default function CampaignsPage() {
   useEffect(() => {
     loadCampaigns();
     loadStats();
+    apiFetch("/settings")
+      .then((s) => {
+        const start = Number(s.sendingWindow?.startHour ?? 9);
+        const end = Number(s.sendingWindow?.endHour ?? 18);
+        const windowHours = start === end ? 24 : (end - start + 24) % 24;
+        setPace({ minGap: s.minCampaignGap || { value: 5, unit: "seconds" }, windowHours });
+      })
+      .catch(() => {});
   }, []);
 
   function updateStep(index, field, value) {
@@ -107,6 +139,7 @@ export default function CampaignsPage() {
       name: "",
       isActive: true,
       steps: [createEmptyStep(1)],
+      gap: { ...DEFAULT_GAP },
     });
     setEditingId(null);
   }
@@ -120,6 +153,10 @@ export default function CampaignsPage() {
         body: step.body || "",
         delayHours: step.delayHours ?? 0,
       })),
+      gap: {
+        value: campaign.gap?.value ?? DEFAULT_GAP.value,
+        unit: campaign.gap?.unit || DEFAULT_GAP.unit,
+      },
     });
     setEditingId(campaign._id);
     setError("");
@@ -145,6 +182,7 @@ export default function CampaignsPage() {
           body: String(step.body || "").trim(),
           delayHours: Number(step.delayHours) || 0,
         })),
+        gap: { value: Number(form.gap.value), unit: form.gap.unit },
       };
 
       if (editingId) {
@@ -351,6 +389,39 @@ export default function CampaignsPage() {
                 <span>Campaign is active</span>
               </label>
 
+              <div className="field-block">
+                <span>Gap between texts</span>
+                <div className="gap-row">
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={form.gap.value}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, gap: { ...prev.gap, value: e.target.value } }))
+                    }
+                    aria-label="Gap between texts"
+                    required
+                  />
+                  <select
+                    value={form.gap.unit}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, gap: { ...prev.gap, unit: e.target.value } }))
+                    }
+                    aria-label="Gap unit"
+                  >
+                    <option value="seconds">seconds</option>
+                    <option value="minutes">minutes</option>
+                    <option value="hours">hours</option>
+                  </select>
+                </div>
+                <small className="muted">
+                  This campaign sends one text, then waits this long before the next
+                  ({paceText(form.gap, pace)}). Minimum: {formatGap(pace.minGap)} (Settings).
+                  Manual texts and AI replies aren&apos;t affected.
+                </small>
+              </div>
+
               <div className="steps-header">
                 <h3>Steps ({totalSteps})</h3>
                 <button type="button" onClick={addStep}>
@@ -444,6 +515,9 @@ export default function CampaignsPage() {
 
                         <div className="campaign-mini-meta">
                           {campaign.steps?.length || 0} steps
+                          <div className="campaign-pace" title="Gap between this campaign's texts">
+                            {paceText(campaign.gap || DEFAULT_GAP, pace)}
+                          </div>
                         </div>
                       </div>
 

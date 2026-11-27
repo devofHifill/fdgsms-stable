@@ -22,6 +22,7 @@ import {
   RECIPIENT_SEND_ERROR_CODES,
 } from "../services/campaignDeliveryService.js";
 import { isWithinSendingWindow } from "../utils/timezone.js";
+import { effectiveGapMs } from "../utils/campaignGap.js";
 
 // While a step is being sent, the enrollment's nextSendAt is pushed this far
 // ahead so no other run (or server process) can pick the same step up. Every
@@ -42,6 +43,44 @@ export async function claimEnrollmentStep(enrollment, now = new Date()) {
     },
     { $set: { nextSendAt: new Date(now.getTime() + SEND_LOCK_MS) } },
     { returnDocument: "after" }
+  );
+}
+
+// ---- campaign gap (campaign plan C2) ------------------------------------
+
+// Contacts looked at per campaign per run, to get past ones that are stopped
+// (opted out, invalid, on the do-not-text list…) before one is sent.
+const PER_CAMPAIGN_SCAN = 25;
+// The delivery sweep doesn't need to run on every few-second tick.
+const SWEEP_EVERY_MS = 60 * 1000;
+let lastSweepAt = 0;
+
+export function gapNotElapsed(campaign, gapMs, now = new Date()) {
+  const last = campaign?.lastCampaignSendAt ? new Date(campaign.lastCampaignSendAt).getTime() : 0;
+  return Boolean(last) && now.getTime() - last < gapMs;
+}
+
+// Atomically take the campaign's next send slot: succeeds only if its last
+// text was at least gapMs ago, so two runs (or two servers) can never send
+// within one gap. Returns { at, previous } or null.
+export async function claimCampaignSendSlot(campaign, gapMs, now = new Date()) {
+  const cutoff = new Date(now.getTime() - gapMs);
+  const updated = await Campaign.findOneAndUpdate(
+    {
+      _id: campaign._id,
+      $or: [{ lastCampaignSendAt: null }, { lastCampaignSendAt: { $lte: cutoff } }],
+    },
+    { $set: { lastCampaignSendAt: now } },
+    { returnDocument: "before" }
+  ).lean();
+  if (!updated) return null;
+  return { at: now, previous: updated.lastCampaignSendAt || null };
+}
+
+export async function releaseCampaignSendSlot(campaign, slot) {
+  await Campaign.updateOne(
+    { _id: campaign._id, lastCampaignSendAt: slot.at },
+    { $set: { lastCampaignSendAt: slot.previous } }
   );
 }
 
@@ -93,9 +132,12 @@ async function automationCycle() {
     // Every cycle, even outside the sending window: release contacts whose
     // previous step was delivered, exclude failed ones, and cancel the steps of
     // contacts with no delivery report after 24 h (campaign plan C1).
-    await reconcileAwaitingEnrollments(now).catch((error) => {
-      console.error("reconcileAwaitingEnrollments error:", error);
-    });
+    if (now.getTime() - lastSweepAt >= SWEEP_EVERY_MS) {
+      lastSweepAt = now.getTime();
+      await reconcileAwaitingEnrollments(now).catch((error) => {
+        console.error("reconcileAwaitingEnrollments error:", error);
+      });
+    }
 
     const settings = await getAutomationSettings();
 
@@ -109,21 +151,39 @@ async function automationCycle() {
       return;
     }
 
-    const limit = Math.max(Number(settings.maxMessagesPerRun) || 20, 1);
+    // Campaign plan C2: each campaign sends at most ONE text per gap (its own
+    // gap, never under the Settings minimum). Campaigns are checked once per
+    // run; only campaigns whose gap has passed look at their due contacts.
+    const dueFilter = { status: "active", nextSendAt: { $ne: null, $lte: now } };
+    const minGap = settings.minCampaignGap;
+    const dueCampaignIds = await Enrollment.distinct("campaignId", dueFilter);
+    const campaignsById = new Map(
+      (await Campaign.find({ _id: { $in: dueCampaignIds } })).map((c) => [String(c._id), c])
+    );
 
-    const enrollments = await Enrollment.find({
-      status: "active",
-      nextSendAt: { $ne: null, $lte: now },
-    })
-      .sort({ nextSendAt: 1, createdAt: 1 })
-      .limit(limit);
+    for (const dueCampaignId of dueCampaignIds) {
+      const campaignDoc = campaignsById.get(String(dueCampaignId)) || null;
+
+      // Paused campaign (isActive=false): hold its contacts without touching
+      // them, so they resume cleanly when the campaign is resumed.
+      if (campaignDoc && !campaignDoc.isActive) continue;
+
+      const gapMs = campaignDoc ? effectiveGapMs(campaignDoc.gap, minGap) : 0;
+      if (gapNotElapsed(campaignDoc, gapMs, now)) continue;
+
+      const enrollments = await Enrollment.find({ ...dueFilter, campaignId: dueCampaignId })
+        .sort({ nextSendAt: 1, createdAt: 1 })
+        .limit(campaignDoc ? PER_CAMPAIGN_SCAN : 500);
+
+      // Becomes true once this campaign has used its slot (or lost it to
+      // another run); the remaining contacts wait for the next gap.
+      let campaignDone = false;
 
     for (const enrollment of enrollments) {
+      if (campaignDone) break;
       try {
-        const [campaign, contact] = await Promise.all([
-          Campaign.findById(enrollment.campaignId),
-          Contact.findById(enrollment.contactId),
-        ]);
+        const campaign = campaignDoc;
+        const contact = await Contact.findById(enrollment.contactId);
 
         if (!campaign || !contact) {
           enrollment.status = "stopped";
@@ -360,9 +420,21 @@ async function automationCycle() {
           continue;
         }
 
+        // One text per campaign per gap: take the campaign's slot first.
+        const slot = await claimCampaignSendSlot(campaign, gapMs);
+        if (!slot) {
+          campaignDone = true; // another run just used this campaign's slot
+          continue;
+        }
+        campaignDone = true;
+
         const claimed = await claimEnrollmentStep(enrollment);
         if (!claimed) {
-          continue; // another run already took (or changed) this step
+          // Another run already took (or changed) this step: give the slot back
+          // so the next contact can use it.
+          await releaseCampaignSendSlot(campaign, slot);
+          campaignDone = false;
+          continue;
         }
         enrollment.nextSendAt = claimed.nextSendAt;
 
@@ -535,6 +607,7 @@ async function automationCycle() {
           },
         });
       }
+    }
     }
   } catch (error) {
     console.error("runAutomationCycle fatal error:", error);

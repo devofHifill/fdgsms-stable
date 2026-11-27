@@ -488,6 +488,11 @@ p.status-success {
   padding-top: var(--s3); border-top: 1px solid var(--border);
 }
 .campaign-stat { display: flex; flex-direction: column; }
+/* Campaign plan C2: gap between texts */
+.gap-row { display: flex; gap: 8px; }
+.gap-row input { flex: 0 0 120px; min-width: 0; }
+.gap-row select { flex: 0 0 140px; }
+.campaign-pace { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .campaign-step-delivery { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--s3); }
 .campaign-stat .n { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
 .campaign-stat .n.rate { color: var(--primary); }
