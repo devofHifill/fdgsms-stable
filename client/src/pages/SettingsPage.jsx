@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../services/api";
 import AppLayout from "../components/AppLayout";
+import {
+  DEFAULT_TIMEZONE,
+  TIMEZONE_OPTIONS,
+  SETTINGS_SAVED_EVENT,
+  timeNowIn,
+} from "../utils/timezones";
 
 // Value = normalized line type stored on the server; label = what the user sees.
 const LINE_TYPE_OPTIONS = [
@@ -12,31 +18,6 @@ const LINE_TYPE_OPTIONS = [
   { value: "unknown", label: "Unknown" },
 ];
 
-// Timezone the campaign sending window hours are read in.
-const DEFAULT_TIMEZONE = "America/New_York";
-const TIMEZONE_OPTIONS = [
-  { value: "America/New_York", label: "Eastern (New York)" },
-  { value: "America/Chicago", label: "Central (Chicago)" },
-  { value: "America/Denver", label: "Mountain (Denver)" },
-  { value: "America/Phoenix", label: "Arizona (Phoenix, no DST)" },
-  { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
-  { value: "America/Anchorage", label: "Alaska (Anchorage)" },
-  { value: "Pacific/Honolulu", label: "Hawaii (Honolulu)" },
-  { value: "UTC", label: "UTC" },
-];
-
-function timeNowIn(timeZone) {
-  try {
-    return new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      hour: "numeric",
-      minute: "2-digit",
-      weekday: "short",
-    }).format(new Date());
-  } catch {
-    return "";
-  }
-}
 
 export default function SettingsPage() {
   const [form, setForm] = useState({
@@ -160,6 +141,10 @@ export default function SettingsPage() {
       });
 
       setSuccess("Automation settings updated");
+      // Let the on-screen clock switch to the new timezone straight away.
+      window.dispatchEvent(
+        new CustomEvent(SETTINGS_SAVED_EVENT, { detail: { timezone: form.timezone } })
+      );
       await loadSettings();
     } catch (err) {
       setError(err.message || "Failed to update settings");
