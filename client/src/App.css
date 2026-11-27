@@ -1166,3 +1166,17 @@ a.list-row + a.list-row { margin-top: var(--s2); }
   .report-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .report-grid { grid-template-columns: 1fr; }
 }
+
+/* Campaign plan C7: Twilio spend */
+.spend-card { margin-bottom: var(--s6); }
+.spend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s6); }
+.spend-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.spend-head span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.spend-head strong { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.spend-lines { margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.spend-lines > div { display: flex; justify-content: space-between; gap: 12px; }
+.spend-lines dt { color: var(--muted); }
+.spend-lines dt small { color: var(--dim); }
+.spend-lines dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.spend-note { font-size: 12px; margin: var(--s4) 0 0; }
+@media (max-width: 900px) { .spend-grid { grid-template-columns: 1fr; } }

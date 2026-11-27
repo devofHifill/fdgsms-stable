@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { apiFetch } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import AppLayout from "../components/AppLayout";
+import TwilioSpendCard from "../components/TwilioSpendCard";
 
 const PATHS = {
   contacts: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
@@ -153,6 +154,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <TwilioSpendCard />
 
       <div className="dash-grid">
         <div className="card">
