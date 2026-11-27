@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { apiFetch } from "../services/api";
 import AppLayout from "../components/AppLayout";
 
@@ -962,6 +963,9 @@ export default function CampaignsPage() {
                             </button>
                           </>
                         ) : null}
+                        <Link className="secondary-button campaign-report-link" to={`/campaigns/${campaign._id}/report`}>
+                          Report
+                        </Link>
                         <button
                           type="button"
                           onClick={() => cloneCampaign(campaign)}
