@@ -30,6 +30,7 @@ import {
   waitForStep,
 } from "../utils/campaignSchedule.js";
 import { updateCampaignStates } from "../services/campaignScheduleService.js";
+import { backfillMessagePrices } from "../services/messagePriceService.js";
 import {
   dayStart,
   platformLimitOf,
@@ -167,6 +168,10 @@ async function automationCycle() {
       });
       await updateCampaignStates(now).catch((error) => {
         console.error("updateCampaignStates error:", error);
+      });
+      // Campaign plan C6: Twilio prices for the campaign report's cost.
+      await backfillMessagePrices(now).catch((error) => {
+        console.error("backfillMessagePrices error:", error);
       });
     }
 

@@ -4,6 +4,7 @@ import DashboardPage from "./pages/DashboardPage";
 import UploadPage from "./pages/UploadPage";
 import ContactsPage from "./pages/ContactsPage";
 import CampaignsPage from "./pages/CampaignsPage";
+import CampaignReportPage from "./pages/CampaignReportPage";
 import EnrollmentsPage from "./pages/EnrollmentsPage";
 import SettingsPage from "./pages/SettingsPage";
 import AiSettingsPage from "./pages/AiSettingsPage";
@@ -66,6 +67,15 @@ export default function App() {
         element={
           <ProtectedRoute>
             <CampaignsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/campaigns/:id/report"
+        element={
+          <ProtectedRoute>
+            <CampaignReportPage />
           </ProtectedRoute>
         }
       />

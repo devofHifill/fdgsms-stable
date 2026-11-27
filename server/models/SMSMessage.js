@@ -90,6 +90,14 @@ const smsMessageSchema = new mongoose.Schema(
       type: Object,
       default: {},
     },
+
+    // Campaign plan C6: what Twilio charged for this text (positive amount,
+    // e.g. 0.0083 USD). Twilio fills the price in a little after sending, so a
+    // background job looks it up; null = not known yet.
+    price: { type: Number, default: null },
+    priceUnit: { type: String, default: "" },
+    priceCheckedAt: { type: Date, default: null },
+    priceFetchAttempts: { type: Number, default: 0 },
   },
   {
     timestamps: true,
