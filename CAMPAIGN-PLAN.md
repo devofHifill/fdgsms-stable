@@ -6,6 +6,22 @@ Status: **design only — no code yet. All questions answered (2026-11-27)** —
 Builds on fix #18 (every text now gets its final status from Twilio: delivered /
 undelivered / failed + error code).
 
+**Status key:** ⬜ To do · 🟨 In progress · 🟦 In review (PR open) · 🧪 On staging, testing · ✅ Done (on main, checked on live) · ⏸ Waiting on a decision
+
+## Tracker
+
+| #  | Stage | What it covers | Status | Branch | PR |
+|----|-------|----------------|--------|--------|----|
+| C1 | Undelivered rules | Step 1 / later-step undelivered → excluded; do-not-text list (all campaigns, Settings block/warn for manual + AI, import skip, manual removal); auto-pause after N in a row (Settings on/off + N); "no report" after 15 min, 24 h late-report window; delivered counts | ⬜ | `feat/campaign-undelivered-rules` | |
+| C2 | Message gap | Per-campaign gap (s / min / h) replaces Max Messages Per Run; Settings minimum gap (≥ 5 s); existing campaigns start at 30 s | ⬜ | `feat/campaign-message-gap` | |
+| C3 | Daily targets | Per-campaign step-1 delivered target; platform daily SMS limit in Settings (starts at 2,000; manual + AI count but never blocked); follow-ups first near the limit | ⬜ | `feat/campaign-daily-target` | |
+| C4 | Schedule | Sending days; start date; end rules (days / weeks / date / until contacts run out, whichever first); per-step start (after previous or fixed "not before" date + minimum wait); Finishing → Completed; add contacts while running | ⬜ | `feat/campaign-schedule` | |
+| C5 | Pause / Stop | Separate Pause and Stop buttons; Stop toggle soft-deletes contacts who never got step 1 (keeps ones in other campaigns or with history) | ⬜ | `feat/campaign-stop-cleanup` | |
+| C6 | Campaign report | Per step / per day counts, top error codes, estimated finish, cost per campaign from message prices | ⬜ | `feat/campaign-report` | |
+| C7 | Twilio spend | Account spend today / this month on the Dashboard (SMS, lookups, number rental) | ⬜ | `feat/twilio-spend` | |
+
+**Progress:** 0 / 7 done · plan agreed 2026-11-27, waiting for stakeholder sign-off before C1
+
 ---
 
 ## 1. What you want (agreed so far)
@@ -177,6 +193,8 @@ Decided (Q9–Q11b):
 ---
 
 ## 8. Build order (each its own branch → staging → live)
+
+Same stages as the [Tracker](#tracker) at the top (C1–C7); status lives there.
 
 1. **Undelivered rules + do-not-text list + 10-in-a-row auto-pause + delivered counts.**
    Useful on its own, smallest risk.
