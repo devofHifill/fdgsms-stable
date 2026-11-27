@@ -43,7 +43,9 @@ export function priceQuery(now = new Date()) {
 // `fetchMessage(sid)` is injectable for tests; default asks Twilio.
 export async function backfillMessagePrices(now = new Date(), { fetchMessage } = {}) {
   const messages = await SMSMessage.find(priceQuery(now))
-    .sort({ createdAt: 1 })
+    // Newest first: running campaigns get their cost within minutes; the
+    // backlog of older texts is filled in when nothing new is waiting.
+    .sort({ createdAt: -1 })
     .limit(PRICE_BATCH)
     .select("_id providerMessageSid")
     .lean();
