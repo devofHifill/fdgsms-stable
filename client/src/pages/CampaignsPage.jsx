@@ -46,9 +46,12 @@ export default function CampaignsPage() {
     isActive: true,
     steps: [createEmptyStep(1)],
     gap: { ...DEFAULT_GAP },
+    dailyStep1Target: "",
   });
   // Settings needed to explain the gap: minimum gap + sending window length.
   const [pace, setPace] = useState({ minGap: { value: 5, unit: "seconds" }, windowHours: 12 });
+  // Campaign plan C3: platform daily SMS limit and how much of it is used today.
+  const [platform, setPlatform] = useState({ limit: null, today: 0 });
 
   // Enroll-contacts modal state
   const [enrollFor, setEnrollFor] = useState(null);
@@ -91,6 +94,7 @@ export default function CampaignsPage() {
         const end = Number(s.sendingWindow?.endHour ?? 18);
         const windowHours = start === end ? 24 : (end - start + 24) % 24;
         setPace({ minGap: s.minCampaignGap || { value: 5, unit: "seconds" }, windowHours });
+        setPlatform({ limit: s.platformDailySmsLimit ?? null, today: Number(s.todaySmsCount) || 0 });
       })
       .catch(() => {});
   }, []);
@@ -140,6 +144,7 @@ export default function CampaignsPage() {
       isActive: true,
       steps: [createEmptyStep(1)],
       gap: { ...DEFAULT_GAP },
+      dailyStep1Target: "",
     });
     setEditingId(null);
   }
@@ -157,6 +162,7 @@ export default function CampaignsPage() {
         value: campaign.gap?.value ?? DEFAULT_GAP.value,
         unit: campaign.gap?.unit || DEFAULT_GAP.unit,
       },
+      dailyStep1Target: campaign.dailyStep1Target ?? "",
     });
     setEditingId(campaign._id);
     setError("");
@@ -183,6 +189,8 @@ export default function CampaignsPage() {
           delayHours: Number(step.delayHours) || 0,
         })),
         gap: { value: Number(form.gap.value), unit: form.gap.unit },
+        dailyStep1Target:
+          String(form.dailyStep1Target).trim() === "" ? null : Number(form.dailyStep1Target),
       };
 
       if (editingId) {
@@ -422,6 +430,26 @@ export default function CampaignsPage() {
                 </small>
               </div>
 
+              <label className="field-block">
+                <span>Daily target (new contacts)</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="No daily target"
+                  value={form.dailyStep1Target}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, dailyStep1Target: e.target.value }))
+                  }
+                />
+                <small className="muted">
+                  Starts new contacts (step 1) until this many step-1 texts are{" "}
+                  <strong>delivered</strong> today; undelivered ones are replaced by more new
+                  contacts. Follow-up steps aren&apos;t limited by it. Leave empty for no target.
+                  {platform.limit ? ` Platform limit: ${platform.limit.toLocaleString()} texts a day (Settings).` : ""}
+                </small>
+              </label>
+
               <div className="steps-header">
                 <h3>Steps ({totalSteps})</h3>
                 <button type="button" onClick={addStep}>
@@ -490,6 +518,14 @@ export default function CampaignsPage() {
           <section className="card">
             <h2>Existing Campaigns</h2>
 
+            {platform.limit && platform.today >= platform.limit ? (
+              <div className="campaign-paused-banner" role="alert">
+                Platform daily SMS limit reached ({platform.today.toLocaleString()} /{" "}
+                {platform.limit.toLocaleString()}). Campaign texts resume tomorrow; manual texts
+                and AI replies still go out.
+              </div>
+            ) : null}
+
             {loading ? (
               <p>Loading campaigns...</p>
             ) : campaigns.length ? (
@@ -520,6 +556,17 @@ export default function CampaignsPage() {
                           </div>
                         </div>
                       </div>
+
+                      {s?.today ? (
+                        <div className="campaign-today">
+                          Today:{" "}
+                          {s.today.target
+                            ? `${s.today.step1Delivered} / ${s.today.target} step-1 delivered`
+                            : `${s.today.step1Delivered} step-1 delivered · no daily target`}
+                          {s.today.step1Waiting ? ` · ${s.today.step1Waiting} waiting for a report` : ""}
+                          {s.today.target && s.today.room === 0 ? " · target reached, new contacts resume tomorrow" : ""}
+                        </div>
+                      ) : null}
 
                       {!campaign.isActive && campaign.pausedReason ? (
                         <div className="campaign-paused-banner" role="alert">

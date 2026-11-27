@@ -16,6 +16,33 @@ export function isValidTimeZone(timeZone) {
   }
 }
 
+// Wall-clock parts of `date` in `timeZone`.
+function wallParts(date, zone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type) => Number(parts.find((p) => p.type === type)?.value);
+  return { y: get("year"), m: get("month"), d: get("day"), h: get("hour") % 24, mi: get("minute"), s: get("second") };
+}
+
+// Campaign plan C3: the moment today began (midnight) in the account
+// timezone, as a real Date. Daily targets and the platform limit reset then.
+export function startOfDayInTimeZone(date, timeZone) {
+  const zone = isValidTimeZone(timeZone) ? timeZone : DEFAULT_TIMEZONE;
+  const w = wallParts(date, zone);
+  // Offset between the zone's wall clock and UTC right now (DST-aware).
+  const wallAsUtc = Date.UTC(w.y, w.m - 1, w.d, w.h, w.mi, w.s);
+  const offsetMs = wallAsUtc - Math.floor(date.getTime() / 1000) * 1000;
+  return new Date(Date.UTC(w.y, w.m - 1, w.d, 0, 0, 0) - offsetMs);
+}
+
 // Hour of the day (0–23) at `date` in `timeZone`. Falls back to the default
 // zone if the stored value is invalid.
 export function getHourInTimeZone(date, timeZone) {

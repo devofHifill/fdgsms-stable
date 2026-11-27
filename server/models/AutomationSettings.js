@@ -41,6 +41,14 @@ const automationSettingsSchema = new mongoose.Schema(
       default: 20,
       min: 1,
     },
+    // Campaign plan C3 (Q4/Q12): most texts the platform may send in a day
+    // (account timezone), all kinds counted. Reaching it stops campaign texts
+    // only. Starts at 2,000 = the 10DLC limit; null = no limit.
+    platformDailySmsLimit: {
+      type: Number,
+      default: 2000,
+      min: 1,
+    },
     // Campaign plan C2 (Q3b): no campaign may use a shorter gap than this.
     // Never below 5 seconds.
     minCampaignGap: {
