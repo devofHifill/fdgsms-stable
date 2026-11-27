@@ -34,8 +34,15 @@ export async function getAutomationSettings(req, res) {
 
 export async function updateAutomationSettings(req, res) {
   try {
-    const { enabled, sendingWindow, timezone, maxMessagesPerRun, allowedLineTypes } =
-      req.body;
+    const {
+      enabled,
+      sendingWindow,
+      timezone,
+      maxMessagesPerRun,
+      allowedLineTypes,
+      autoPause,
+      doNotTextList,
+    } = req.body;
 
     let item = await AutomationSettings.findOne({ key: "default" });
 
@@ -68,6 +75,36 @@ export async function updateAutomationSettings(req, res) {
         startHour,
         endHour,
       };
+    }
+
+    // Campaign plan C1: auto-pause after N undelivered in a row (Q7b).
+    if (autoPause !== undefined) {
+      const after = Number(autoPause?.afterUndeliveredInARow);
+      if (autoPause?.afterUndeliveredInARow !== undefined && (!Number.isInteger(after) || after < 1 || after > 1000)) {
+        return res.status(400).json({
+          message: "Auto-pause needs a whole number of undelivered texts between 1 and 1000",
+        });
+      }
+      if (autoPause?.enabled !== undefined) {
+        item.set("autoPause.enabled", Boolean(autoPause.enabled));
+      }
+      if (autoPause?.afterUndeliveredInARow !== undefined) {
+        item.set("autoPause.afterUndeliveredInARow", after);
+      }
+    }
+
+    // Campaign plan C1: do-not-text list for manual texts / AI replies (Q8).
+    if (doNotTextList !== undefined) {
+      for (const kind of ["manual", "ai"]) {
+        const value = doNotTextList?.[kind];
+        if (value === undefined) continue;
+        if (!["block", "warn"].includes(value)) {
+          return res.status(400).json({
+            message: `doNotTextList.${kind} must be "block" or "warn"`,
+          });
+        }
+        item.set(`doNotTextList.${kind}`, value);
+      }
     }
 
     if (timezone !== undefined) {

@@ -20,6 +20,7 @@ import {
 } from "../services/aiReplyService.js";
 import { generateAiReply } from "../services/aiReplyGenerator.js";
 import { getRecentAiHistory } from "../services/aiHistoryService.js";
+import { checkDoNotText } from "../services/doNotTextService.js";
 import { decideOutcome, enforceMessageFormat } from "../services/ai/guardrails.js";
 import { singleFlight } from "../utils/singleFlight.js";
 
@@ -167,6 +168,12 @@ async function processAiReplyJob(job, settings) {
 
   if (!contact.normalizedPhone) {
     return skip(job, "missing_phone");
+  }
+
+  // Do-not-text list: AI replies follow the Settings choice (block / warn).
+  const dnt = await checkDoNotText(contact.normalizedPhone, "ai");
+  if (dnt.blocked) {
+    return skip(job, "do_not_text_list");
   }
 
   // Latest messages (returned oldest first) for context.

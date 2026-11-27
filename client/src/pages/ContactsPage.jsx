@@ -78,6 +78,7 @@ export default function ContactsPage() {
 
   const [selectedContact, setSelectedContact] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [removingDnt, setRemovingDnt] = useState(false);
 
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -129,6 +130,25 @@ export default function ContactsPage() {
       setCampaigns(data.items || []);
     } catch (err) {
       setError(err.message || "Failed to load campaigns");
+    }
+  }
+
+  // Campaign plan C1 (Q8c): take a number off the do-not-text list by hand.
+  async function handleRemoveDoNotText(id) {
+    if (!window.confirm("Remove this number from the do-not-text list? Campaigns will be able to text it again.")) {
+      return;
+    }
+    try {
+      setRemovingDnt(true);
+      setError("");
+      await apiFetch(`/contacts/${id}/do-not-text`, { method: "DELETE" });
+      setSuccess("Removed from the do-not-text list");
+      const data = await apiFetch(`/contacts/${id}`);
+      setSelectedContact(data);
+    } catch (err) {
+      setError(err.message || "Failed to update the do-not-text list");
+    } finally {
+      setRemovingDnt(false);
     }
   }
 
@@ -596,6 +616,29 @@ export default function ContactsPage() {
                     <p>{selectedContact.status || "-"}</p>
                   </div>
                 </div>
+
+                {selectedContact.doNotText ? (
+                  <div className="dnt-box" role="note">
+                    <strong>On the do-not-text list</strong>
+                    <div>
+                      Undelivered on{" "}
+                      {new Date(selectedContact.doNotText.since).toLocaleDateString()}
+                      {selectedContact.doNotText.errorMessage
+                        ? ` — ${selectedContact.doNotText.errorMessage}`
+                        : selectedContact.doNotText.errorCode
+                          ? ` (${selectedContact.doNotText.errorCode})`
+                          : ""}
+                      . Campaigns won&apos;t text this number.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDoNotText(selectedContact._id)}
+                      disabled={removingDnt}
+                    >
+                      {removingDnt ? "Removing…" : "Remove from do-not-text list"}
+                    </button>
+                  </div>
+                ) : null}
 
                 <div className="enroll-panel">
                   <h3>Enroll in Campaign</h3>

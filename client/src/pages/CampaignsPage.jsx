@@ -447,6 +447,12 @@ export default function CampaignsPage() {
                         </div>
                       </div>
 
+                      {!campaign.isActive && campaign.pausedReason ? (
+                        <div className="campaign-paused-banner" role="alert">
+                          {campaign.pausedReason}
+                        </div>
+                      ) : null}
+
                       <div className="campaign-step-preview">
                         {(campaign.steps || []).map((step) => (
                           <div key={step.stepNumber} className="campaign-step-row">
@@ -477,6 +483,46 @@ export default function CampaignsPage() {
                             <span className="n rate">{s.replyRate}%</span>
                             <span className="l">Reply rate</span>
                           </div>
+                          <div className="campaign-stat">
+                            <span className="n">{s.delivered ?? 0}</span>
+                            <span className="l">Delivered</span>
+                          </div>
+                          <div className="campaign-stat">
+                            <span className="n">{s.undelivered ?? 0}</span>
+                            <span className="l">Undelivered</span>
+                          </div>
+                          <div className="campaign-stat">
+                            <span className="n">{(s.waiting ?? 0) + (s.noReport ?? 0)}</span>
+                            <span className="l" title={`${s.noReport ?? 0} with no report after 15 min`}>
+                              Waiting / no report
+                            </span>
+                          </div>
+                          <div className="campaign-stat">
+                            <span className="n rate">{s.deliveryRate ?? 0}%</span>
+                            <span className="l">Delivery rate</span>
+                          </div>
+                          <div className="campaign-stat">
+                            <span className="n">{(s.excludedUndelivered ?? 0) + (s.skippedDoNotText ?? 0)}</span>
+                            <span
+                              className="l"
+                              title={`${s.excludedUndelivered ?? 0} undelivered in this campaign · ${s.skippedDoNotText ?? 0} already on the do-not-text list`}
+                            >
+                              Excluded
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {s?.steps && Object.keys(s.steps).length > 1 ? (
+                        <div className="campaign-step-delivery">
+                          {Object.entries(s.steps)
+                            .sort(([a], [b]) => Number(a) - Number(b))
+                            .map(([step, v]) => (
+                              <span key={step} className="step-delay-chip">
+                                Step {step}: {v.delivered}/{v.sent} delivered
+                                {v.undelivered ? ` · ${v.undelivered} undelivered` : ""}
+                              </span>
+                            ))}
                         </div>
                       ) : null}
 
