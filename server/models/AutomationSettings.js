@@ -34,10 +34,18 @@ const automationSettingsSchema = new mongoose.Schema(
       default: DEFAULT_TIMEZONE,
       trim: true,
     },
+    // No longer used (campaign plan C2, Q17) — replaced by each campaign's gap.
+    // Kept so old documents still validate.
     maxMessagesPerRun: {
       type: Number,
       default: 20,
       min: 1,
+    },
+    // Campaign plan C2 (Q3b): no campaign may use a shorter gap than this.
+    // Never below 5 seconds.
+    minCampaignGap: {
+      value: { type: Number, default: 5, min: 0 },
+      unit: { type: String, enum: ["seconds", "minutes", "hours"], default: "seconds" },
     },
     // Phone line types (normalized) allowed for SMS sending. Numbers whose
     // Twilio line-type lookup falls outside this set are blocked.

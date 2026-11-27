@@ -17,6 +17,13 @@ import Campaign from "../models/Campaign.js";
 import Enrollment from "../models/Enrollment.js";
 import SMSMessage from "../models/SMSMessage.js";
 import { NO_REPORT_AFTER_MS } from "../services/campaignDeliveryService.js";
+import AutomationSettings from "../models/AutomationSettings.js";
+import {
+  parseGap,
+  gapToMs,
+  DEFAULT_CAMPAIGN_GAP,
+  DEFAULT_MIN_GAP,
+} from "../utils/campaignGap.js";
 
 // Normalize an incoming steps array into stored step docs.
 function normalizeSteps(steps = []) {
@@ -27,18 +34,34 @@ function normalizeSteps(steps = []) {
   }));
 }
 
+// Campaign plan C2: the campaign's gap must not be shorter than the Settings
+// minimum gap (itself never below 5 s). Returns { gap } or { error }.
+async function validateCampaignGap(input) {
+  const settings = await AutomationSettings.findOne({ key: "default" }).lean();
+  const minMs = gapToMs(settings?.minCampaignGap || DEFAULT_MIN_GAP);
+  return parseGap(input, { minMs, label: "Gap between texts" });
+}
+
 export async function createCampaign(req, res) {
   try {
-    const { name, isActive, steps } = req.body;
+    const { name, isActive, steps, gap } = req.body;
 
     if (!name || !Array.isArray(steps) || !steps.length) {
       return res.status(400).json({ message: "Invalid campaign data" });
+    }
+
+    let campaignGap = DEFAULT_CAMPAIGN_GAP;
+    if (gap !== undefined) {
+      const checked = await validateCampaignGap(gap);
+      if (checked.error) return res.status(400).json({ message: checked.error });
+      campaignGap = checked.gap;
     }
 
     const campaign = await Campaign.create({
       name: String(name).trim(),
       isActive: typeof isActive === "boolean" ? isActive : true,
       steps: normalizeSteps(steps),
+      gap: campaignGap,
     });
 
     res.json(campaign);
@@ -62,8 +85,14 @@ export async function updateCampaign(req, res) {
       return res.status(400).json({ message: "Invalid campaign id" });
     }
 
-    const { name, isActive, steps } = req.body;
+    const { name, isActive, steps, gap } = req.body;
     const update = {};
+
+    if (gap !== undefined) {
+      const checked = await validateCampaignGap(gap);
+      if (checked.error) return res.status(400).json({ message: checked.error });
+      update.gap = checked.gap;
+    }
 
     if (typeof name === "string") update.name = name.trim();
     if (typeof isActive === "boolean") update.isActive = isActive;
@@ -145,6 +174,7 @@ export async function cloneCampaign(req, res) {
       name: `${source.name} (copy)`,
       isActive: false,
       steps: normalizeSteps(source.steps || []),
+      gap: source.gap?.value ? { value: source.gap.value, unit: source.gap.unit || "seconds" } : DEFAULT_CAMPAIGN_GAP,
     });
 
     res.json(campaign);

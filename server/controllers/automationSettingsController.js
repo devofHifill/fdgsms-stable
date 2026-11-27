@@ -5,6 +5,7 @@ import {
   normalizeLineType,
 } from "../services/phoneIntelligenceService.js";
 import { isValidTimeZone } from "../utils/timezone.js";
+import { parseGap, GAP_FLOOR_MS } from "../utils/campaignGap.js";
 
 export async function getAutomationSettings(req, res) {
   try {
@@ -42,6 +43,7 @@ export async function updateAutomationSettings(req, res) {
       allowedLineTypes,
       autoPause,
       doNotTextList,
+      minCampaignGap,
     } = req.body;
 
     let item = await AutomationSettings.findOne({ key: "default" });
@@ -75,6 +77,16 @@ export async function updateAutomationSettings(req, res) {
         startHour,
         endHour,
       };
+    }
+
+    // Campaign plan C2 (Q3b): minimum gap between campaign texts, ≥ 5 s.
+    // Campaigns with a shorter gap use this minimum from now on.
+    if (minCampaignGap !== undefined) {
+      const checked = parseGap(minCampaignGap, { minMs: GAP_FLOOR_MS, label: "Minimum gap" });
+      if (checked.error) {
+        return res.status(400).json({ message: checked.error });
+      }
+      item.set("minCampaignGap", checked.gap);
     }
 
     // Campaign plan C1: auto-pause after N undelivered in a row (Q7b).
