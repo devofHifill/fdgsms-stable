@@ -12,7 +12,7 @@ undelivered / failed + error code).
 
 | #  | Stage | What it covers | Status | Branch | PR |
 |----|-------|----------------|--------|--------|----|
-| C1 | Undelivered rules | Step 1 / later-step undelivered → excluded; do-not-text list (all campaigns, Settings block/warn for manual + AI, import skip, manual removal); auto-pause after N in a row (Settings on/off + N); "no report" after 15 min, 24 h late-report window; delivered counts | 🟨 | `feat/campaign-undelivered-rules` | built 2026-11-27, not pushed yet |
+| C1 | Undelivered rules | Step 1 / later-step undelivered → excluded; do-not-text list (all campaigns, Settings block/warn for manual + AI, import skip, manual removal); auto-pause after N in a row (Settings on/off + N); "no report" after 15 min, 24 h late-report window; delivered counts | ✅ | `feat/campaign-undelivered-rules` | [#71](https://github.com/devofHifill/fdgsms-stable/pull/71) → staging → main [#72](https://github.com/devofHifill/fdgsms-stable/pull/72) |
 | C2 | Message gap | Per-campaign gap (s / min / h) replaces Max Messages Per Run; Settings minimum gap (≥ 5 s); existing campaigns start at 30 s | ⬜ | `feat/campaign-message-gap` | |
 | C3 | Daily targets | Per-campaign step-1 delivered target; platform daily SMS limit in Settings (starts at 2,000; manual + AI count but never blocked); follow-ups first near the limit | ⬜ | `feat/campaign-daily-target` | |
 | C4 | Schedule | Sending days; start date; end rules (days / weeks / date / until contacts run out, whichever first); per-step start (after previous or fixed "not before" date + minimum wait); Finishing → Completed; add contacts while running | ⬜ | `feat/campaign-schedule` | |
@@ -20,7 +20,7 @@ undelivered / failed + error code).
 | C6 | Campaign report | Per step / per day counts, top error codes, estimated finish, cost per campaign from message prices | ⬜ | `feat/campaign-report` | |
 | C7 | Twilio spend | Account spend today / this month on the Dashboard (SMS, lookups, number rental) | ⬜ | `feat/twilio-spend` | |
 
-**Progress:** 0 / 7 done · C1 built and tested locally (2026-11-27)
+**Progress:** 1 / 7 done · C1 live 2026-11-27 (2-step test: step 1 delivered in 4 s, step 2 sent 5 min after delivery; undelivered path tested on a throwaway DB only)
 
 ---
 
