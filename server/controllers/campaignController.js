@@ -19,6 +19,7 @@ import SMSMessage from "../models/SMSMessage.js";
 import { NO_REPORT_AFTER_MS } from "../services/campaignDeliveryService.js";
 import AutomationSettings from "../models/AutomationSettings.js";
 import { dayStart, countStep1Today, step1Room } from "../services/dailyLimitService.js";
+import { parseSchedule, parseStepStart, acceptsNewContacts } from "../utils/campaignSchedule.js";
 import {
   parseGap,
   gapToMs,
@@ -26,13 +27,31 @@ import {
   DEFAULT_MIN_GAP,
 } from "../utils/campaignGap.js";
 
-// Normalize an incoming steps array into stored step docs.
-function normalizeSteps(steps = []) {
-  return steps.map((step, index) => ({
-    stepNumber: index + 1,
-    body: String(step.body || "").trim(),
-    delayHours: Number(step.delayHours) || 0,
-  }));
+// Normalize an incoming steps array into stored step docs → { steps } or
+// { error }. Campaign plan C4: steps 2+ may start from a fixed date (read in
+// the account timezone); step 1 always follows the campaign start + target.
+function normalizeSteps(steps = [], timeZone) {
+  const out = [];
+  for (const [index, step] of steps.entries()) {
+    let start = { type: "afterPrevious", at: null, minWaitHours: 24 };
+    if (index > 0 && step.start?.type === "fixedAt") {
+      const parsed = parseStepStart(step.start, timeZone);
+      if (parsed.error) return { error: `Step ${index + 1}: ${parsed.error}` };
+      start = parsed.start;
+    }
+    out.push({
+      stepNumber: index + 1,
+      body: String(step.body || "").trim(),
+      delayHours: Number(step.delayHours) || 0,
+      start,
+    });
+  }
+  return { steps: out };
+}
+
+async function accountTimeZone() {
+  const settings = await AutomationSettings.findOne({ key: "default" }, { timezone: 1 }).lean();
+  return settings?.timezone || "America/New_York";
 }
 
 // Campaign plan C3: step-1 delivered per day. Empty / null = no target.
@@ -56,7 +75,7 @@ async function validateCampaignGap(input) {
 
 export async function createCampaign(req, res) {
   try {
-    const { name, isActive, steps, gap, dailyStep1Target } = req.body;
+    const { name, isActive, steps, gap, dailyStep1Target, schedule } = req.body;
 
     if (!name || !Array.isArray(steps) || !steps.length) {
       return res.status(400).json({ message: "Invalid campaign data" });
@@ -73,10 +92,17 @@ export async function createCampaign(req, res) {
       campaignGap = checked.gap;
     }
 
+    const timeZone = await accountTimeZone();
+    const normalized = normalizeSteps(steps, timeZone);
+    if (normalized.error) return res.status(400).json({ message: normalized.error });
+    const parsedSchedule = parseSchedule(schedule || {}, timeZone);
+    if (parsedSchedule.error) return res.status(400).json({ message: parsedSchedule.error });
+
     const campaign = await Campaign.create({
       name: String(name).trim(),
       isActive: typeof isActive === "boolean" ? isActive : true,
-      steps: normalizeSteps(steps),
+      steps: normalized.steps,
+      schedule: parsedSchedule.schedule,
       gap: campaignGap,
       dailyStep1Target: parseDailyTarget(dailyStep1Target).value ?? null,
     });
@@ -102,8 +128,15 @@ export async function updateCampaign(req, res) {
       return res.status(400).json({ message: "Invalid campaign id" });
     }
 
-    const { name, isActive, steps, gap, dailyStep1Target } = req.body;
+    const { name, isActive, steps, gap, dailyStep1Target, schedule } = req.body;
     const update = {};
+    const timeZone = await accountTimeZone();
+
+    if (schedule !== undefined) {
+      const parsed = parseSchedule(schedule || {}, timeZone);
+      if (parsed.error) return res.status(400).json({ message: parsed.error });
+      update.schedule = parsed.schedule;
+    }
 
     if (dailyStep1Target !== undefined) {
       const checked = parseDailyTarget(dailyStep1Target);
@@ -129,7 +162,9 @@ export async function updateCampaign(req, res) {
       if (!steps.length) {
         return res.status(400).json({ message: "Campaign needs at least one step" });
       }
-      update.steps = normalizeSteps(steps);
+      const normalized = normalizeSteps(steps, timeZone);
+      if (normalized.error) return res.status(400).json({ message: normalized.error });
+      update.steps = normalized.steps;
     }
 
     if (!Object.keys(update).length) {
@@ -144,6 +179,20 @@ export async function updateCampaign(req, res) {
 
     if (!campaign) {
       return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    // Campaign plan C4: moving the end later re-opens a campaign that had
+    // reached its end date (a completed one stays completed — clone it).
+    if (
+      update.schedule &&
+      campaign.state === "finishing" &&
+      campaign.finishingReason === "end_date" &&
+      acceptsNewContacts({ ...campaign.toObject(), state: "running" })
+    ) {
+      campaign.state = "running";
+      campaign.finishingReason = "";
+      campaign.finishingAt = null;
+      await campaign.save();
     }
 
     res.json(campaign);
@@ -196,7 +245,14 @@ export async function cloneCampaign(req, res) {
     const campaign = await Campaign.create({
       name: `${source.name} (copy)`,
       isActive: false,
-      steps: normalizeSteps(source.steps || []),
+      // Copy steps as stored (incl. fixed-date starts); a clone starts fresh.
+      steps: (source.steps || []).map((s, i) => ({
+        stepNumber: i + 1,
+        body: s.body,
+        delayHours: s.delayHours ?? 0,
+        start: s.start || { type: "afterPrevious", at: null, minWaitHours: 24 },
+      })),
+      schedule: source.schedule || undefined,
       gap: source.gap?.value ? { value: source.gap.value, unit: source.gap.unit || "seconds" } : DEFAULT_CAMPAIGN_GAP,
     });
 

@@ -24,6 +24,13 @@ import {
 import { isWithinSendingWindow } from "../utils/timezone.js";
 import { effectiveGapMs } from "../utils/campaignGap.js";
 import {
+  hasStarted,
+  isSendingDay,
+  acceptsNewContacts,
+  waitForStep,
+} from "../utils/campaignSchedule.js";
+import { updateCampaignStates } from "../services/campaignScheduleService.js";
+import {
   dayStart,
   platformLimitOf,
   countPlatformSentToday,
@@ -158,6 +165,9 @@ async function automationCycle() {
       await reconcileAwaitingEnrollments(now).catch((error) => {
         console.error("reconcileAwaitingEnrollments error:", error);
       });
+      await updateCampaignStates(now).catch((error) => {
+        console.error("updateCampaignStates error:", error);
+      });
     }
 
     const settings = await getAutomationSettings();
@@ -207,6 +217,14 @@ async function automationCycle() {
       // them, so they resume cleanly when the campaign is resumed.
       if (campaignDoc && !campaignDoc.isActive) continue;
 
+      // Campaign plan C4: completed campaigns send nothing; nothing goes out
+      // before the start or on a non-sending day (it waits for the next one).
+      if (campaignDoc) {
+        if (campaignDoc.state === "completed") continue;
+        if (!hasStarted(campaignDoc, now)) continue;
+        if (!isSendingDay(campaignDoc, now, settings.timezone)) continue;
+      }
+
       const gapMs = campaignDoc ? effectiveGapMs(campaignDoc.gap, minGap) : 0;
       if (gapNotElapsed(campaignDoc, gapMs, now)) continue;
 
@@ -230,7 +248,8 @@ async function automationCycle() {
         // Step 1 only while the campaign's daily target has room and the
         // platform limit isn't needed for follow-ups.
         let newContacts = [];
-        if (platformRemaining > followUpsDue) {
+        // After the campaign's end (date rules, or finishing) no new contacts.
+        if (platformRemaining > followUpsDue && acceptsNewContacts(campaignDoc, now)) {
           const room = campaignDoc.dailyStep1Target
             ? step1Room(
                 campaignDoc.dailyStep1Target,
@@ -562,11 +581,13 @@ async function automationCycle() {
             // webhook (or the reconcile sweep) sets nextSendAt.
             enrollment.currentStep = Number(nextStep.stepNumber);
             enrollment.nextSendAt = null;
+            const wait = waitForStep(nextStep); // C4: after-previous or fixed date
             enrollment.awaitingDelivery = {
               messageId: sentMessage._id,
               stepNumber: Number(currentStep.stepNumber),
               sentAt: enrollment.lastSentAt,
-              delayMs: Math.max(Number(nextStep.delayHours || 0), 0) * 60 * 60 * 1000,
+              delayMs: wait.delayMs,
+              notBefore: wait.notBefore,
             };
           }
 

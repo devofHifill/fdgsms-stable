@@ -7,7 +7,96 @@ function createEmptyStep(stepNumber = 1) {
     stepNumber,
     body: "",
     delayHours: 24,
+    start: { type: "afterPrevious", date: "", time: "09:00", minWaitHours: 24 },
   };
+}
+
+// Campaign plan C4: schedule (dates are in the account timezone).
+const DAYS = [
+  { v: 1, l: "Mon" }, { v: 2, l: "Tue" }, { v: 3, l: "Wed" }, { v: 4, l: "Thu" },
+  { v: 5, l: "Fri" }, { v: 6, l: "Sat" }, { v: 0, l: "Sun" },
+];
+const EMPTY_SCHEDULE = {
+  sendDays: [0, 1, 2, 3, 4, 5, 6],
+  startDate: "",
+  startTime: "09:00",
+  endAfterDays: "",
+  endAfterWeeks: "",
+  endOnDate: "",
+  untilContactsRunOut: false,
+};
+
+// Stored Date -> { date: "YYYY-MM-DD", time: "HH:MM" } in the account timezone.
+function zonedParts(value, timeZone) {
+  if (!value) return { date: "", time: "" };
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(value));
+    const g = (k) => parts.find((p) => p.type === k)?.value;
+    return { date: `${g("year")}-${g("month")}-${g("day")}`, time: `${g("hour")}:${g("minute")}` };
+  } catch {
+    return { date: "", time: "" };
+  }
+}
+
+function formatWhen(value, timeZone, withTime = true) {
+  if (!value) return "";
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone, month: "short", day: "numeric", year: "numeric",
+      ...(withTime ? { hour: "numeric", minute: "2-digit" } : {}),
+    }).format(new Date(value));
+  } catch {
+    return "";
+  }
+}
+
+function scheduleToForm(schedule, timeZone) {
+  if (!schedule) return { ...EMPTY_SCHEDULE };
+  const start = zonedParts(schedule.startAt, timeZone);
+  // endOn is stored as the midnight AFTER the chosen day -> show that day.
+  const endOn = schedule.endOn ? zonedParts(new Date(new Date(schedule.endOn).getTime() - 1), timeZone) : { date: "" };
+  return {
+    sendDays: schedule.sendDays?.length ? schedule.sendDays : EMPTY_SCHEDULE.sendDays,
+    startDate: start.date,
+    startTime: start.time || "09:00",
+    endAfterDays: schedule.endAfterDays ?? "",
+    endAfterWeeks: schedule.endAfterWeeks ?? "",
+    endOnDate: endOn.date,
+    untilContactsRunOut: Boolean(schedule.untilContactsRunOut),
+  };
+}
+
+function daysText(days) {
+  const set = new Set(days?.length ? days : EMPTY_SCHEDULE.sendDays);
+  if (set.size === 7) return "Every day";
+  if (set.size === 5 && [1, 2, 3, 4, 5].every((d) => set.has(d))) return "Mon–Fri";
+  return DAYS.filter((d) => set.has(d.v)).map((d) => d.l).join(", ");
+}
+
+// One line: "Mon–Fri · starts Dec 1, 9:00 AM · ends after 14 days or when contacts run out"
+function scheduleText(campaign, timeZone) {
+  const s = campaign.schedule || {};
+  const parts = [daysText(s.sendDays)];
+  if (s.startAt) parts.push(`starts ${formatWhen(s.startAt, timeZone)}`);
+  const ends = [];
+  if (s.endAfterDays) ends.push(`after ${s.endAfterDays} day${s.endAfterDays === 1 ? "" : "s"}`);
+  if (s.endAfterWeeks) ends.push(`after ${s.endAfterWeeks} week${s.endAfterWeeks === 1 ? "" : "s"}`);
+  if (s.endOn) ends.push(`after ${formatWhen(new Date(new Date(s.endOn).getTime() - 1), timeZone, false)}`);
+  if (s.untilContactsRunOut) ends.push("when contacts run out");
+  parts.push(ends.length ? `ends ${ends.join(" or ")}` : "no end date");
+  return parts.join(" · ");
+}
+
+function campaignStatus(campaign) {
+  if (!campaign.isActive) return { label: "Paused", cls: "badge-orange" };
+  if (campaign.state === "completed") return { label: "Completed", cls: "badge-gray" };
+  if (campaign.state === "finishing") return { label: "Finishing", cls: "badge-orange" };
+  if (campaign.schedule?.startAt && new Date(campaign.schedule.startAt) > new Date()) {
+    return { label: "Scheduled", cls: "badge-blue" };
+  }
+  return { label: "Active", cls: "badge-green" };
 }
 
 // Campaign plan C2: gap between two texts of a campaign.
@@ -47,9 +136,11 @@ export default function CampaignsPage() {
     steps: [createEmptyStep(1)],
     gap: { ...DEFAULT_GAP },
     dailyStep1Target: "",
+    schedule: { ...EMPTY_SCHEDULE },
   });
   // Settings needed to explain the gap: minimum gap + sending window length.
   const [pace, setPace] = useState({ minGap: { value: 5, unit: "seconds" }, windowHours: 12 });
+  const [accountTz, setAccountTz] = useState("America/New_York");
   // Campaign plan C3: platform daily SMS limit and how much of it is used today.
   const [platform, setPlatform] = useState({ limit: null, today: 0 });
 
@@ -94,6 +185,7 @@ export default function CampaignsPage() {
         const end = Number(s.sendingWindow?.endHour ?? 18);
         const windowHours = start === end ? 24 : (end - start + 24) % 24;
         setPace({ minGap: s.minCampaignGap || { value: 5, unit: "seconds" }, windowHours });
+        if (s.timezone) setAccountTz(s.timezone);
         setPlatform({ limit: s.platformDailySmsLimit ?? null, today: Number(s.todaySmsCount) || 0 });
       })
       .catch(() => {});
@@ -110,6 +202,19 @@ export default function CampaignsPage() {
         ...prev,
         steps: nextSteps,
       };
+    });
+  }
+
+  function setSchedule(patch) {
+    setForm((prev) => ({ ...prev, schedule: { ...prev.schedule, ...patch } }));
+  }
+
+  function updateStepStart(index, patch) {
+    setForm((prev) => {
+      const nextSteps = [...prev.steps];
+      const current = nextSteps[index].start || { type: "afterPrevious", date: "", time: "09:00", minWaitHours: 24 };
+      nextSteps[index] = { ...nextSteps[index], start: { ...current, ...patch } };
+      return { ...prev, steps: nextSteps };
     });
   }
 
@@ -145,6 +250,7 @@ export default function CampaignsPage() {
       steps: [createEmptyStep(1)],
       gap: { ...DEFAULT_GAP },
       dailyStep1Target: "",
+      schedule: { ...EMPTY_SCHEDULE },
     });
     setEditingId(null);
   }
@@ -157,7 +263,17 @@ export default function CampaignsPage() {
         stepNumber: i + 1,
         body: step.body || "",
         delayHours: step.delayHours ?? 0,
+        start:
+          step.start?.type === "fixedAt"
+            ? {
+                type: "fixedAt",
+                date: zonedParts(step.start.at, accountTz).date,
+                time: zonedParts(step.start.at, accountTz).time || "09:00",
+                minWaitHours: step.start.minWaitHours ?? 24,
+              }
+            : { type: "afterPrevious", date: "", time: "09:00", minWaitHours: 24 },
       })),
+      schedule: scheduleToForm(campaign.schedule, accountTz),
       gap: {
         value: campaign.gap?.value ?? DEFAULT_GAP.value,
         unit: campaign.gap?.unit || DEFAULT_GAP.unit,
@@ -187,7 +303,12 @@ export default function CampaignsPage() {
           stepNumber: index + 1,
           body: String(step.body || "").trim(),
           delayHours: Number(step.delayHours) || 0,
+          start:
+            index > 0 && step.start?.type === "fixedAt"
+              ? { type: "fixedAt", date: step.start.date, time: step.start.time, minWaitHours: step.start.minWaitHours }
+              : { type: "afterPrevious" },
         })),
+        schedule: form.schedule,
         gap: { value: Number(form.gap.value), unit: form.gap.unit },
         dailyStep1Target:
           String(form.dailyStep1Target).trim() === "" ? null : Number(form.dailyStep1Target),
@@ -450,6 +571,68 @@ export default function CampaignsPage() {
                 </small>
               </label>
 
+              <div className="field-block schedule-block">
+                <span>Schedule</span>
+                <div className="day-picks" role="group" aria-label="Sending days">
+                  {DAYS.map((d) => (
+                    <label key={d.v} className="day-pick">
+                      <input
+                        type="checkbox"
+                        checked={form.schedule.sendDays.includes(d.v)}
+                        onChange={() =>
+                          setForm((prev) => {
+                            const set = new Set(prev.schedule.sendDays);
+                            if (set.has(d.v)) set.delete(d.v);
+                            else set.add(d.v);
+                            return { ...prev, schedule: { ...prev.schedule, sendDays: [...set].sort() } };
+                          })
+                        }
+                      />
+                      <span>{d.l}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="schedule-row">
+                  <label className="field-block">
+                    <span>Start date (empty = now)</span>
+                    <input type="date" value={form.schedule.startDate} onChange={(e) => setSchedule({ startDate: e.target.value })} />
+                  </label>
+                  <label className="field-block">
+                    <span>Start time</span>
+                    <input type="time" value={form.schedule.startTime} onChange={(e) => setSchedule({ startTime: e.target.value })} />
+                  </label>
+                </div>
+
+                <div className="schedule-row">
+                  <label className="field-block">
+                    <span>End after days</span>
+                    <input type="number" min="1" step="1" placeholder="—" value={form.schedule.endAfterDays} onChange={(e) => setSchedule({ endAfterDays: e.target.value })} />
+                  </label>
+                  <label className="field-block">
+                    <span>End after weeks</span>
+                    <input type="number" min="1" step="1" placeholder="—" value={form.schedule.endAfterWeeks} onChange={(e) => setSchedule({ endAfterWeeks: e.target.value })} />
+                  </label>
+                  <label className="field-block">
+                    <span>End after date</span>
+                    <input type="date" value={form.schedule.endOnDate} onChange={(e) => setSchedule({ endOnDate: e.target.value })} />
+                  </label>
+                </div>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={form.schedule.untilContactsRunOut}
+                    onChange={(e) => setSchedule({ untilContactsRunOut: e.target.checked })}
+                  />
+                  <span>End when every contact has had step 1</span>
+                </label>
+                <small className="muted">
+                  Dates and times are in the account timezone ({accountTz}). With several end rules the
+                  campaign ends at whichever comes first; after that no new contacts start and the ones
+                  already in it finish their steps. A step due on a non-sending day waits for the next one.
+                </small>
+              </div>
+
               <div className="steps-header">
                 <h3>Steps ({totalSteps})</h3>
                 <button type="button" onClick={addStep}>
@@ -471,18 +654,67 @@ export default function CampaignsPage() {
                       </button>
                     </div>
 
-                    <label className="field-block">
-                      <span>Delay Hours</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={step.delayHours}
-                        onChange={(e) =>
-                          updateStep(index, "delayHours", e.target.value)
-                        }
-                      />
-                    </label>
+                    {index > 0 ? (
+                      <label className="field-block">
+                        <span>Starts</span>
+                        <select
+                          value={step.start?.type || "afterPrevious"}
+                          onChange={(e) => updateStepStart(index, { type: e.target.value })}
+                        >
+                          <option value="afterPrevious">After the previous step is delivered</option>
+                          <option value="fixedAt">From a fixed date</option>
+                        </select>
+                      </label>
+                    ) : null}
+
+                    {index > 0 && step.start?.type === "fixedAt" ? (
+                      <div className="schedule-row">
+                        <label className="field-block">
+                          <span>Not before</span>
+                          <input
+                            type="date"
+                            value={step.start.date}
+                            onChange={(e) => updateStepStart(index, { date: e.target.value })}
+                            required
+                          />
+                        </label>
+                        <label className="field-block">
+                          <span>Time</span>
+                          <input
+                            type="time"
+                            value={step.start.time}
+                            onChange={(e) => updateStepStart(index, { time: e.target.value })}
+                          />
+                        </label>
+                        <label className="field-block">
+                          <span>Minimum wait (hours)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={step.start.minWaitHours}
+                            onChange={(e) => updateStepStart(index, { minWaitHours: e.target.value })}
+                          />
+                        </label>
+                        <small className="muted schedule-hint">
+                          From this date, each contact gets this step once the minimum wait has passed
+                          since their own previous step was delivered ({accountTz}).
+                        </small>
+                      </div>
+                    ) : (
+                      <label className="field-block">
+                        <span>{index === 0 ? "Delay hours (after enrolling)" : "Delay hours (after the previous step is delivered)"}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={step.delayHours}
+                          onChange={(e) =>
+                            updateStep(index, "delayHours", e.target.value)
+                          }
+                        />
+                      </label>
+                    )}
 
                     <label className="field-block">
                       <span>Message Body</span>
@@ -539,12 +771,8 @@ export default function CampaignsPage() {
                           <h3>{campaign.name}</h3>
                           <p>
                             Status{" "}
-                            <span
-                              className={
-                                campaign.isActive ? "badge-green" : "badge-orange"
-                              }
-                            >
-                              {campaign.isActive ? "Active" : "Paused"}
+                            <span className={campaignStatus(campaign).cls}>
+                              {campaignStatus(campaign).label}
                             </span>
                           </p>
                         </div>
@@ -556,6 +784,8 @@ export default function CampaignsPage() {
                           </div>
                         </div>
                       </div>
+
+                      <div className="campaign-schedule-line">{scheduleText(campaign, accountTz)}</div>
 
                       {s?.today ? (
                         <div className="campaign-today">
@@ -579,7 +809,9 @@ export default function CampaignsPage() {
                           <div key={step.stepNumber} className="campaign-step-row">
                             <span className="step-chip">Step {step.stepNumber}</span>
                             <span className="step-delay-chip">
-                              {step.delayHours}h
+                              {step.start?.type === "fixedAt"
+                                ? `from ${formatWhen(step.start.at, accountTz)} (min ${step.start.minWaitHours ?? 24}h)`
+                                : `${step.delayHours}h`}
                             </span>
                             <p>{step.body}</p>
                           </div>
