@@ -29,7 +29,9 @@ export function priceQuery(now = new Date()) {
     providerMessageSid: { $type: "string", $gt: "" },
     status: { $in: FINAL_STATUSES },
     price: null,
-    priceFetchAttempts: { $lt: PRICE_MAX_ATTEMPTS },
+    // $not also matches texts sent before C6, which have no attempts field
+    // ($lt alone never matches a missing field).
+    priceFetchAttempts: { $not: { $gte: PRICE_MAX_ATTEMPTS } },
     createdAt: { $lte: new Date(now.getTime() - PRICE_FIRST_AFTER_MS) },
     $or: [
       { priceCheckedAt: null },
