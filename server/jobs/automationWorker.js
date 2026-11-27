@@ -13,6 +13,14 @@ import {
 } from "../services/phoneIntelligenceService.js";
 import { renderTemplate, buildContactTemplateVariables } from "../utils/template.js";
 import { singleFlight } from "../utils/singleFlight.js";
+import { describeTwilioError } from "../utils/twilioErrors.js";
+import { findDoNotText, describeListing } from "../services/doNotTextService.js";
+import {
+  reconcileAwaitingEnrollments,
+  excludeAfterFailure,
+  countUndelivered,
+  RECIPIENT_SEND_ERROR_CODES,
+} from "../services/campaignDeliveryService.js";
 import { isWithinSendingWindow } from "../utils/timezone.js";
 
 // While a step is being sent, the enrollment's nextSendAt is pushed this far
@@ -82,6 +90,13 @@ async function automationCycle() {
   const now = new Date();
 
   try {
+    // Every cycle, even outside the sending window: release contacts whose
+    // previous step was delivered, exclude failed ones, and cancel the steps of
+    // contacts with no delivery report after 24 h (campaign plan C1).
+    await reconcileAwaitingEnrollments(now).catch((error) => {
+      console.error("reconcileAwaitingEnrollments error:", error);
+    });
+
     const settings = await getAutomationSettings();
 
     if (!settings.enabled) {
@@ -149,6 +164,29 @@ async function automationCycle() {
             campaignId: campaign._id,
           });
 
+          continue;
+        }
+
+        // Do-not-text list: campaigns never text a number that was undelivered
+        // in any campaign before (campaign plan C1, Q7).
+        const listed = await findDoNotText(contact.normalizedPhone);
+        if (listed) {
+          enrollment.status = "stopped";
+          enrollment.stopReason = "do_not_text_list";
+          enrollment.lastError = describeListing(listed);
+          enrollment.nextSendAt = null;
+          await enrollment.save();
+
+          await createSystemLog({
+            level: "info",
+            category: "automation",
+            event: "automation_skipped_do_not_text",
+            message: "Campaign step skipped: number is on the do-not-text list",
+            contactId: contact._id,
+            enrollmentId: enrollment._id,
+            campaignId: campaign._id,
+            metadata: { phone: contact.normalizedPhone, listedErrorCode: listed.errorCode },
+          });
           continue;
         }
 
@@ -338,7 +376,7 @@ async function automationCycle() {
             to: contact.normalizedPhone,
             body: renderedBody,
           });
-          await SMSMessage.create({
+          const sentMessage = await SMSMessage.create({
             contactId: contact._id,
             phone: contact.phone,
             normalizedPhone: contact.normalizedPhone,
@@ -372,11 +410,17 @@ async function automationCycle() {
             enrollment.completedAt = new Date();
             enrollment.nextSendAt = null;
           } else {
+            // The next step waits until THIS text is delivered; its delay then
+            // counts from the delivery time (campaign plan C1, Q2). The status
+            // webhook (or the reconcile sweep) sets nextSendAt.
             enrollment.currentStep = Number(nextStep.stepNumber);
-            enrollment.nextSendAt = computeNextSendAtFromStep(
-              nextStep,
-              enrollment.lastSentAt
-            );
+            enrollment.nextSendAt = null;
+            enrollment.awaitingDelivery = {
+              messageId: sentMessage._id,
+              stepNumber: Number(currentStep.stepNumber),
+              sentAt: enrollment.lastSentAt,
+              delayMs: Math.max(Number(nextStep.delayHours || 0), 0) * 60 * 60 * 1000,
+            };
           }
 
           await enrollment.save();
@@ -394,6 +438,7 @@ async function automationCycle() {
               nextStep: nextStep ? Number(nextStep.stepNumber) : null,
               phone: contact.normalizedPhone,
               nextSendAt: enrollment.nextSendAt,
+              waitingForDelivery: Boolean(nextStep),
               lookupSource: eligibility.source,
               normalizedLineType: eligibility.normalizedLineType,
             },
@@ -402,7 +447,10 @@ async function automationCycle() {
           enrollment.failureCount = (enrollment.failureCount || 0) + 1;
           enrollment.lastError = sendError.message || "Send failed";
 
-          await SMSMessage.create({
+          const sendErrorCode = sendError.code ? String(sendError.code) : "";
+          const described = describeTwilioError(sendErrorCode);
+
+          const failedMessage = await SMSMessage.create({
             contactId: contact._id,
             phone: contact.phone,
             normalizedPhone: contact.normalizedPhone,
@@ -411,13 +459,16 @@ async function automationCycle() {
             provider: "twilio",
             providerMessageSid: "",
             status: "failed",
-            errorCode: sendError.code ? String(sendError.code) : "",
-            errorMessage: sendError.message || "",
+            errorCode: sendErrorCode,
+            errorMessage: described?.message || sendError.message || "",
             enrollmentId: enrollment._id,
             campaignId: campaign._id,
             stepNumber: currentStep.stepNumber,
             messageType: "automation",
             metadata: {
+              ...(described
+                ? { deliveryError: { code: described.code, permanent: described.permanent } }
+                : {}),
               lookup: {
                 source: eligibility.source,
                 lineType: eligibility.rawLineType,
@@ -445,15 +496,31 @@ async function automationCycle() {
             },
           });
 
-          if (enrollment.failureCount >= 2) {
+          // A send-time error about the number itself (invalid, opted out at
+          // Twilio, not reachable, not mobile) is treated like undelivered:
+          // excluded + do-not-text list. Other errors (auth, config, network)
+          // keep the retry-once rule. Both count towards the auto-pause run.
+          if (RECIPIENT_SEND_ERROR_CODES.has(sendErrorCode)) {
             enrollment.status = "stopped";
-            enrollment.stopReason = "send_failed";
+            enrollment.stopReason = `undelivered_step_${currentStep.stepNumber}`;
             enrollment.nextSendAt = null;
+            await enrollment.save();
+            await excludeAfterFailure(failedMessage, described);
           } else {
-            enrollment.nextSendAt = new Date(Date.now() + 60 * 60 * 1000);
+            if (enrollment.failureCount >= 2) {
+              enrollment.status = "stopped";
+              enrollment.stopReason = "send_failed";
+              enrollment.nextSendAt = null;
+            } else {
+              enrollment.nextSendAt = new Date(Date.now() + 60 * 60 * 1000);
+            }
+            await enrollment.save();
           }
 
-          await enrollment.save();
+          await countUndelivered(
+            campaign._id,
+            described?.message || sendError.message || ""
+          );
         }
       } catch (err) {
         console.error("Automation error:", err);

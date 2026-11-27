@@ -28,6 +28,7 @@ import {
 import { maybeEnqueueAiReply } from "../services/aiReplyService.js";
 import { createSystemLog } from "../services/systemLogService.js";
 import { describeTwilioError, shouldApplyStatus } from "../utils/twilioErrors.js";
+import { onCampaignDeliveryStatus } from "../services/campaignDeliveryService.js";
 
 const DUPLICATE_KEY = 11000;
 
@@ -365,7 +366,12 @@ export async function handleStatusCallback(req, res) {
       update.status = MessageStatus;
     }
 
-    const error = describeTwilioError(ErrorCode);
+    const isFailure = MessageStatus === "undelivered" || MessageStatus === "failed";
+    const error =
+      describeTwilioError(ErrorCode) ||
+      (isFailure
+        ? { code: "", label: "No error code", permanent: false, contactInvalid: false, message: `SMS ${MessageStatus} (no error code from Twilio)` }
+        : null);
     if (error) {
       update.errorCode = error.code;
       update.errorMessage = error.message;
@@ -375,16 +381,41 @@ export async function handleStatusCallback(req, res) {
       };
     }
 
+    const now = new Date();
+    const firstDelivered = MessageStatus === "delivered" && message.status !== "delivered";
+    // First time we hear about a failure (Twilio can resend callbacks).
+    const firstFailure =
+      isFailure && update.status === MessageStatus && !["undelivered", "failed"].includes(message.status);
+    if (firstDelivered && update.status === "delivered") {
+      update["metadata.deliveredAt"] = now;
+    }
+
     if (Object.keys(update).length) {
       await SMSMessage.updateOne({ _id: message._id }, { $set: update });
     }
 
-    const isFailure = MessageStatus === "undelivered" || MessageStatus === "failed";
-    if (isFailure && error && !message.errorCode) {
-      // First time we hear about this failure (Twilio can resend callbacks).
-      const stoppedEnrollments = error.permanent
-        ? await handlePermanentDeliveryFailure(message, error)
-        : 0;
+    // Campaign texts: delivered → next step scheduled from now; undelivered /
+    // failed → contact excluded, number on the do-not-text list, run counter
+    // (campaign plan C1).
+    let campaignOutcome = null;
+    if (message.campaignId && (firstDelivered || firstFailure)) {
+      campaignOutcome = await onCampaignDeliveryStatus(
+        message,
+        firstDelivered ? "delivered" : MessageStatus,
+        error,
+        now
+      );
+    }
+
+    if (firstFailure) {
+      // Non-campaign texts keep the earlier rule: permanent errors stop the
+      // contact's campaigns and dead numbers are marked invalid.
+      const stoppedEnrollments =
+        !message.campaignId && error.permanent
+          ? await handlePermanentDeliveryFailure(message, error)
+          : campaignOutcome?.excluded
+            ? 1
+            : 0;
 
       await createSystemLog({
         level: error.permanent ? "warn" : "error",
@@ -400,6 +431,9 @@ export async function handleStatusCallback(req, res) {
           permanent: error.permanent,
           contactMarkedInvalid: Boolean(error.permanent && error.contactInvalid),
           stoppedEnrollments,
+          addedToDoNotText: Boolean(message.campaignId),
+          campaignUndeliveredInARow: campaignOutcome?.count ?? null,
+          campaignAutoPaused: Boolean(campaignOutcome?.paused),
         },
       });
     }

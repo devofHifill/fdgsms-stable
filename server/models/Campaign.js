@@ -33,6 +33,21 @@ const campaignSchema = new mongoose.Schema(
       type: [campaignStepSchema],
       default: [],
     },
+    // Campaign plan C1 (Q7b/Q7c): undelivered campaign texts in a row; a
+    // delivered one resets it. Reaching the Settings limit pauses the campaign
+    // (isActive=false) until you resume it.
+    consecutiveUndelivered: {
+      type: Number,
+      default: 0,
+    },
+    pausedReason: {
+      type: String,
+      default: "",
+    },
+    autoPausedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

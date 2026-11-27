@@ -17,6 +17,11 @@ import Campaign from "../models/Campaign.js";
 import Contact from "../models/Contact.js";
 import Enrollment from "../models/Enrollment.js";
 import { createSystemLog } from "../services/systemLogService.js";
+import {
+  findDoNotText,
+  findDoNotTextMany,
+  describeListing,
+} from "../services/doNotTextService.js";
 
 function getSortedSteps(campaign) {
   return [...(campaign?.steps || [])].sort(
@@ -57,6 +62,13 @@ export async function enrollContact(req, res) {
     if (contact.optedOut) {
       return res.status(400).json({
         message: "Contact has opted out and cannot be enrolled",
+      });
+    }
+
+    const listed = await findDoNotText(contact.normalizedPhone);
+    if (listed) {
+      return res.status(400).json({
+        message: `${describeListing(listed)} Campaigns can't text it.`,
       });
     }
 
@@ -177,16 +189,20 @@ export async function bulkEnrollContacts(req, res) {
       _id: { $in: uniqueContactIds },
       isDeleted: false,
     })
-      .select("_id optedOut")
+      .select("_id optedOut normalizedPhone")
       .lean();
 
-    // Opted-out contacts are ineligible (compliance) and excluded here, so the
-    // existing skip accounting reports them under skippedContactIds.
+    // Numbers on the do-not-text list are never enrolled (campaign plan C1).
+    const listed = await findDoNotTextMany(contacts.map((item) => item.normalizedPhone));
+
+    // Opted-out and do-not-text contacts are ineligible and excluded here, so
+    // the existing skip accounting reports them under skippedContactIds.
     const validContactIds = new Set(
       contacts
-        .filter((item) => !item.optedOut)
+        .filter((item) => !item.optedOut && !listed.has(item.normalizedPhone))
         .map((item) => String(item._id))
     );
+    const skippedDoNotText = contacts.filter((item) => listed.has(item.normalizedPhone)).length;
 
     const existing = await Enrollment.find({
       contactId: { $in: uniqueContactIds },
@@ -236,6 +252,7 @@ export async function bulkEnrollContacts(req, res) {
         createdCount: created.length,
         skippedCount:
           uniqueContactIds.length - created.length,
+        skippedDoNotText,
         firstStep: Number(firstStep.stepNumber),
         firstDelayHours: Number(firstStep.delayHours || 0),
       },
@@ -246,6 +263,7 @@ export async function bulkEnrollContacts(req, res) {
       requestedCount: uniqueContactIds.length,
       createdCount: created.length,
       skippedCount: uniqueContactIds.length - created.length,
+      skippedDoNotText,
       skippedContactIds: uniqueContactIds.filter(
         (id) =>
           existingContactIds.has(String(id)) ||

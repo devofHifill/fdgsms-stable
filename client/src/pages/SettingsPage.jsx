@@ -48,6 +48,8 @@ export default function SettingsPage() {
     timezone: DEFAULT_TIMEZONE,
     maxMessagesPerRun: 20,
     allowedLineTypes: ["mobile"],
+    autoPause: { enabled: true, afterUndeliveredInARow: 10 },
+    doNotTextList: { manual: "warn", ai: "warn" },
   });
 
   const [twilio, setTwilio] = useState({
@@ -91,6 +93,14 @@ export default function SettingsPage() {
         allowedLineTypes: Array.isArray(data.allowedLineTypes)
           ? data.allowedLineTypes
           : ["mobile"],
+        autoPause: {
+          enabled: data.autoPause?.enabled !== false,
+          afterUndeliveredInARow: Number(data.autoPause?.afterUndeliveredInARow ?? 10),
+        },
+        doNotTextList: {
+          manual: data.doNotTextList?.manual === "block" ? "block" : "warn",
+          ai: data.doNotTextList?.ai === "block" ? "block" : "warn",
+        },
       });
 
       setTwilio({
@@ -131,6 +141,11 @@ export default function SettingsPage() {
         timezone: form.timezone,
         maxMessagesPerRun: Number(form.maxMessagesPerRun),
         allowedLineTypes: form.allowedLineTypes,
+        autoPause: {
+          enabled: form.autoPause.enabled,
+          afterUndeliveredInARow: Number(form.autoPause.afterUndeliveredInARow),
+        },
+        doNotTextList: form.doNotTextList,
       };
 
       await apiFetch("/settings", {
@@ -426,6 +441,87 @@ export default function SettingsPage() {
                   ))}
                 </div>
               </div>
+
+              <div className="field-block">
+                <span>Undelivered campaign texts</span>
+                <p className="muted">
+                  Any campaign text that comes back undelivered or failed stops that
+                  contact&apos;s remaining steps and puts the number on the
+                  do-not-text list, so no campaign texts it again.
+                </p>
+
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={form.autoPause.enabled}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        autoPause: { ...prev.autoPause, enabled: e.target.checked },
+                      }))
+                    }
+                  />
+                  <span>Pause a campaign automatically after</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000"
+                    className="inline-number"
+                    value={form.autoPause.afterUndeliveredInARow}
+                    disabled={!form.autoPause.enabled}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        autoPause: { ...prev.autoPause, afterUndeliveredInARow: e.target.value },
+                      }))
+                    }
+                    aria-label="Undelivered texts in a row before pausing"
+                  />
+                  <span>undelivered texts in a row</span>
+                </label>
+                <small className="muted">
+                  Every error code counts; a delivered text resets the count. A paused
+                  campaign restarts only when you press Resume on it.
+                </small>
+              </div>
+
+              <div className="settings-grid">
+                <label className="field-block">
+                  <span>Do-not-text list: manual texts</span>
+                  <select
+                    value={form.doNotTextList.manual}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        doNotTextList: { ...prev.doNotTextList, manual: e.target.value },
+                      }))
+                    }
+                  >
+                    <option value="warn">Allow with a warning</option>
+                    <option value="block">Block</option>
+                  </select>
+                </label>
+
+                <label className="field-block">
+                  <span>Do-not-text list: AI replies</span>
+                  <select
+                    value={form.doNotTextList.ai}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        doNotTextList: { ...prev.doNotTextList, ai: e.target.value },
+                      }))
+                    }
+                  >
+                    <option value="warn">Allow with a warning</option>
+                    <option value="block">Block</option>
+                  </select>
+                </label>
+              </div>
+              <small className="muted">
+                Campaigns always skip numbers on the do-not-text list. Remove a number
+                by hand from its contact page.
+              </small>
 
               <div className="form-actions">
                 <button type="submit" disabled={saving}>

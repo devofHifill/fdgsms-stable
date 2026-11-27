@@ -16,6 +16,7 @@
 
 import Contact from "../models/Contact.js";
 import UploadBatch from "../models/UploadBatch.js";
+import SuppressedNumber from "../models/SuppressedNumber.js";
 import fs from "fs";
 import {
   parseContactFile,
@@ -23,6 +24,17 @@ import {
 } from "../utils/parseContactFile.js";
 import { getPhoneValidationResult } from "../utils/phone.js";
 import { createSystemLog } from "../services/systemLogService.js";
+
+// phone → "Previously undelivered (30006)" for every number on the list.
+async function loadDoNotTextReasons() {
+  const rows = await SuppressedNumber.find({}, { normalizedPhone: 1, errorCode: 1, _id: 0 }).lean();
+  return new Map(
+    rows.map((row) => [
+      row.normalizedPhone,
+      `Previously undelivered${row.errorCode ? ` (${row.errorCode})` : ""} — on the do-not-text list`,
+    ])
+  );
+}
 
 function buildFullName(firstName, lastName, fullName) {
   if (fullName?.trim()) return fullName.trim();
@@ -86,6 +98,9 @@ export async function uploadPreview(req, res) {
       ).map((item) => item.normalizedPhone)
     );
 
+    // Do-not-text list (campaign plan C1, Q8b): shown as invalid, not imported.
+    const doNotText = await loadDoNotTextReasons();
+
     const seenInFile = new Set();
     const validRows = [];
     const invalidRows = [];
@@ -119,6 +134,10 @@ export async function uploadPreview(req, res) {
 
       if (normalizedPhone && existingPhones.has(normalizedPhone)) {
         errors.push("Phone already exists in database");
+      }
+
+      if (normalizedPhone && doNotText.has(normalizedPhone)) {
+        errors.push(doNotText.get(normalizedPhone));
       }
 
       if (normalizedPhone && seenInFile.has(normalizedPhone)) {
@@ -266,6 +285,8 @@ export async function importContacts(req, res) {
       ).map((item) => item.normalizedPhone)
     );
 
+    const doNotText = await loadDoNotTextReasons();
+
     const seenInImport = new Set();
     const docs = [];
     const failedRows = [];
@@ -293,6 +314,10 @@ export async function importContacts(req, res) {
 
       if (normalizedPhone && existingPhones.has(normalizedPhone)) {
         errors.push("Phone already exists in database");
+      }
+
+      if (normalizedPhone && doNotText.has(normalizedPhone)) {
+        errors.push(doNotText.get(normalizedPhone));
       }
 
       if (normalizedPhone && seenInImport.has(normalizedPhone)) {

@@ -19,6 +19,7 @@ import { sendSMS } from "../services/twilioService.js";
 import { upsertConversation } from "../services/conversationService.js";
 import { createSystemLog } from "../services/systemLogService.js";
 import { resolveContactSmsEligibility } from "../services/phoneIntelligenceService.js";
+import { checkDoNotText } from "../services/doNotTextService.js";
 
 export async function sendManualMessage(req, res) {
   try {
@@ -65,6 +66,22 @@ export async function sendManualMessage(req, res) {
 
       return res.status(403).json({
         message: "This contact has opted out and cannot be messaged.",
+      });
+    }
+
+    // Do-not-text list: block or allow with a warning, as chosen in Settings.
+    const dnt = await checkDoNotText(contact.normalizedPhone, "manual");
+    if (dnt.blocked) {
+      await createSystemLog({
+        level: "warn",
+        category: "sms",
+        event: "manual_send_blocked_do_not_text",
+        message: "Manual send blocked: number is on the do-not-text list",
+        contactId: contact._id,
+        metadata: { phone: contact.normalizedPhone, listedErrorCode: dnt.entry?.errorCode || "" },
+      });
+      return res.status(403).json({
+        message: `${dnt.warning} Manual texts to it are blocked in Settings.`,
       });
     }
 
@@ -174,6 +191,7 @@ export async function sendManualMessage(req, res) {
       return res.status(200).json({
         message: "SMS sent successfully",
         item: savedMessage,
+        ...(dnt.warning ? { warning: dnt.warning } : {}),
       });
     } catch (error) {
       savedMessage = await SMSMessage.create({
@@ -284,6 +302,14 @@ export async function retryMessage(req, res) {
         .json({ message: "This contact has opted out and cannot be messaged." });
     }
 
+    // A retry is a manual action → the manual do-not-text choice applies.
+    const dnt = await checkDoNotText(contact.normalizedPhone, "manual");
+    if (dnt.blocked) {
+      return res.status(403).json({
+        message: `${dnt.warning} Manual texts to it are blocked in Settings.`,
+      });
+    }
+
     try {
       const providerResponse = await sendSMS({
         to: contact.normalizedPhone,
@@ -294,6 +320,10 @@ export async function retryMessage(req, res) {
       message.status = providerResponse.status || "queued";
       message.errorCode = "";
       message.errorMessage = "";
+      if (message.metadata?.deliveryError) {
+        message.metadata = { ...message.metadata, deliveryError: undefined, deliveredAt: undefined };
+        message.markModified("metadata");
+      }
       await message.save();
 
       await createSystemLog({
@@ -305,7 +335,11 @@ export async function retryMessage(req, res) {
         metadata: { messageId: id, providerMessageSid: providerResponse.sid || "" },
       });
 
-      return res.status(200).json({ message: "Message resent", item: message });
+      return res.status(200).json({
+        message: "Message resent",
+        item: message,
+        ...(dnt.warning ? { warning: dnt.warning } : {}),
+      });
     } catch (error) {
       message.status = "failed";
       message.errorCode = error.code ? String(error.code) : "";

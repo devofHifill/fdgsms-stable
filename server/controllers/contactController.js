@@ -16,6 +16,7 @@
 import mongoose from "mongoose";
 import Contact from "../models/Contact.js";
 import { escapeRegex } from "../utils/regex.js";
+import { findDoNotText, removeFromDoNotText } from "../services/doNotTextService.js";
 
 export async function getContacts(req, res) {
   try {
@@ -141,11 +142,52 @@ export async function getContactById(req, res) {
       });
     }
 
-    return res.status(200).json(contact);
+    const listed = await findDoNotText(contact.normalizedPhone);
+    return res.status(200).json({
+      ...contact,
+      doNotText: listed
+        ? {
+            since: listed.createdAt,
+            errorCode: listed.errorCode,
+            errorMessage: listed.errorMessage,
+            campaignId: listed.campaignId,
+            stepNumber: listed.stepNumber,
+          }
+        : null,
+    });
   } catch (error) {
     console.error("Get contact by id error:", error);
     return res.status(500).json({
       message: "Failed to fetch contact details",
     });
+  }
+}
+
+// DELETE /api/contacts/:id/do-not-text → take the contact's number off the
+// do-not-text list by hand, e.g. after they changed carrier (campaign plan Q8c).
+export async function removeContactFromDoNotText(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid contact id" });
+    }
+
+    const contact = await Contact.findOne({ _id: id, isDeleted: false }).lean();
+    if (!contact) {
+      return res.status(404).json({ message: "Contact not found" });
+    }
+
+    const removed = await removeFromDoNotText(contact.normalizedPhone, {
+      contactId: contact._id,
+      by: req.user?.email || "admin",
+    });
+    if (!removed) {
+      return res.status(404).json({ message: "This number is not on the do-not-text list" });
+    }
+
+    return res.status(200).json({ message: "Removed from the do-not-text list" });
+  } catch (error) {
+    console.error("removeContactFromDoNotText error:", error);
+    return res.status(500).json({ message: "Failed to update the do-not-text list" });
   }
 }

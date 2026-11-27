@@ -45,6 +45,18 @@ const automationSettingsSchema = new mongoose.Schema(
       type: [String],
       default: ["mobile"],
     },
+    // Campaign plan C1 (Q7b): pause a campaign after this many undelivered /
+    // failed campaign texts in a row (any error code). Delivered resets it.
+    autoPause: {
+      enabled: { type: Boolean, default: true },
+      afterUndeliveredInARow: { type: Number, default: 10, min: 1 },
+    },
+    // Campaign plan C1 (Q8): numbers on the do-not-text list are always
+    // skipped by campaigns; for manual texts and AI replies you choose.
+    doNotTextList: {
+      manual: { type: String, enum: ["block", "warn"], default: "warn" },
+      ai: { type: String, enum: ["block", "warn"], default: "warn" },
+    },
   },
   { timestamps: true }
 );

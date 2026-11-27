@@ -16,6 +16,7 @@ import mongoose from "mongoose";
 import Campaign from "../models/Campaign.js";
 import Enrollment from "../models/Enrollment.js";
 import SMSMessage from "../models/SMSMessage.js";
+import { NO_REPORT_AFTER_MS } from "../services/campaignDeliveryService.js";
 
 // Normalize an incoming steps array into stored step docs.
 function normalizeSteps(steps = []) {
@@ -66,6 +67,12 @@ export async function updateCampaign(req, res) {
 
     if (typeof name === "string") update.name = name.trim();
     if (typeof isActive === "boolean") update.isActive = isActive;
+    // Resuming (by hand) clears an auto-pause and its run counter (Q7c).
+    if (isActive === true) {
+      update.consecutiveUndelivered = 0;
+      update.pausedReason = "";
+      update.autoPausedAt = null;
+    }
     if (Array.isArray(steps)) {
       if (!steps.length) {
         return res.status(400).json({ message: "Campaign needs at least one step" });
@@ -149,6 +156,7 @@ export async function cloneCampaign(req, res) {
 // Aggregate performance stats for every campaign (keyed by campaign id).
 export async function getCampaignStats(req, res) {
   try {
+    const noReportBefore = new Date(Date.now() - NO_REPORT_AFTER_MS);
     const [enrollAgg, msgAgg] = await Promise.all([
       Enrollment.aggregate([
         {
@@ -159,18 +167,59 @@ export async function getCampaignStats(req, res) {
             completed: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
             stopped: { $sum: { $cond: [{ $eq: ["$status", "stopped"] }, 1, 0] } },
             replied: { $sum: { $cond: [{ $eq: ["$stopReason", "replied"] }, 1, 0] } },
+            // Campaign plan C1: excluded after an undelivered step, skipped
+            // because already on the do-not-text list, or no report in 24 h.
+            excludedUndelivered: {
+              $sum: {
+                $cond: [
+                  { $regexMatch: { input: { $ifNull: ["$stopReason", ""] }, regex: "^undelivered_step_" } },
+                  1,
+                  0,
+                ],
+              },
+            },
+            skippedDoNotText: { $sum: { $cond: [{ $eq: ["$stopReason", "do_not_text_list"] }, 1, 0] } },
+            noReportCancelled: { $sum: { $cond: [{ $eq: ["$stopReason", "no_delivery_report"] }, 1, 0] } },
+            waitingForDelivery: {
+              $sum: { $cond: [{ $ne: [{ $ifNull: ["$awaitingDelivery.messageId", null] }, null] }, 1, 0] },
+            },
           },
         },
       ]),
+      // Delivery outcome of every campaign text, per campaign and step.
       SMSMessage.aggregate([
         { $match: { direction: "outbound", campaignId: { $ne: null } } },
-        { $group: { _id: "$campaignId", sent: { $sum: 1 } } },
+        {
+          $project: {
+            campaignId: 1,
+            stepNumber: 1,
+            outcome: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$status", "delivered"] }, then: "delivered" },
+                  { case: { $in: ["$status", ["undelivered", "failed"]] }, then: "undelivered" },
+                  { case: { $lt: ["$createdAt", noReportBefore] }, then: "noReport" },
+                ],
+                default: "waiting",
+              },
+            },
+          },
+        },
+        {
+          $group: {
+            _id: { campaignId: "$campaignId", step: "$stepNumber", outcome: "$outcome" },
+            count: { $sum: 1 },
+          },
+        },
       ]),
     ]);
 
     const stats = {};
     const blank = () => ({
       enrolled: 0, active: 0, completed: 0, stopped: 0, replied: 0, sent: 0, replyRate: 0,
+      delivered: 0, undelivered: 0, waiting: 0, noReport: 0, deliveryRate: 0,
+      excludedUndelivered: 0, skippedDoNotText: 0, noReportCancelled: 0, waitingForDelivery: 0,
+      steps: {},
     });
 
     for (const row of enrollAgg) {
@@ -186,14 +235,29 @@ export async function getCampaignStats(req, res) {
         replyRate: row.enrolled
           ? Math.round((row.replied / row.enrolled) * 100)
           : 0,
+        excludedUndelivered: row.excludedUndelivered,
+        skippedDoNotText: row.skippedDoNotText,
+        noReportCancelled: row.noReportCancelled,
+        waitingForDelivery: row.waitingForDelivery,
       };
     }
 
     for (const row of msgAgg) {
-      if (!row._id) continue;
-      const id = String(row._id);
+      if (!row._id?.campaignId) continue;
+      const id = String(row._id.campaignId);
       if (!stats[id]) stats[id] = blank();
-      stats[id].sent = row.sent;
+      const s = stats[id];
+      const step = String(row._id.step ?? "?");
+      s.steps[step] = s.steps[step] || { sent: 0, delivered: 0, undelivered: 0, waiting: 0, noReport: 0 };
+      s.steps[step].sent += row.count;
+      s.steps[step][row._id.outcome] += row.count;
+      s.sent += row.count;
+      s[row._id.outcome] += row.count;
+    }
+
+    for (const s of Object.values(stats)) {
+      const finished = s.delivered + s.undelivered;
+      s.deliveryRate = finished ? Math.round((s.delivered / finished) * 100) : 0;
     }
 
     return res.json({ stats });
