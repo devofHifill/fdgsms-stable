@@ -43,6 +43,34 @@ export function startOfDayInTimeZone(date, timeZone) {
   return new Date(Date.UTC(w.y, w.m - 1, w.d, 0, 0, 0) - offsetMs);
 }
 
+// Campaign plan C4: "2026-12-03" + "09:00" typed in the account timezone →
+// the real moment (Date). DST-aware; a time that doesn't exist on a
+// spring-forward day lands an hour later. Returns null for bad input.
+export function zonedDateTimeToDate(dateStr, timeStr = "00:00", timeZone) {
+  const zone = isValidTimeZone(timeZone) ? timeZone : DEFAULT_TIMEZONE;
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || "").trim());
+  const tm = /^(\d{1,2}):(\d{2})$/.exec(String(timeStr || "00:00").trim());
+  if (!dm || !tm) return null;
+  const [y, mo, d] = [Number(dm[1]), Number(dm[2]), Number(dm[3])];
+  const [h, mi] = [Number(tm[1]), Number(tm[2])];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59) return null;
+  const target = Date.UTC(y, mo - 1, d, h, mi, 0);
+  let guess = target;
+  for (let i = 0; i < 2; i++) {
+    const w = wallParts(new Date(guess), zone);
+    const wallAsUtc = Date.UTC(w.y, w.m - 1, w.d, w.h, w.mi, w.s);
+    guess += target - wallAsUtc;
+  }
+  return new Date(guess);
+}
+
+// Day of the week (0 = Sunday … 6 = Saturday) at `date` in `timeZone`.
+export function dayOfWeekInTimeZone(date, timeZone) {
+  const zone = isValidTimeZone(timeZone) ? timeZone : DEFAULT_TIMEZONE;
+  const w = wallParts(date, zone);
+  return new Date(Date.UTC(w.y, w.m - 1, w.d)).getUTCDay();
+}
+
 // Hour of the day (0–23) at `date` in `timeZone`. Falls back to the default
 // zone if the stored value is invalid.
 export function getHourInTimeZone(date, timeZone) {

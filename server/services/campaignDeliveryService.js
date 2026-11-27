@@ -104,7 +104,11 @@ export async function releaseAfterDelivery(message, deliveredAt) {
   }).lean();
   if (!enrollment) return false;
 
-  const nextSendAt = nextSendAfterDelivery(deliveredAt, enrollment.awaitingDelivery?.delayMs);
+  // Fixed-date steps (C4): never before their date, and at least the minimum
+  // wait after this delivery — whichever is later.
+  const afterDelay = nextSendAfterDelivery(deliveredAt, enrollment.awaitingDelivery?.delayMs);
+  const notBefore = enrollment.awaitingDelivery?.notBefore ? new Date(enrollment.awaitingDelivery.notBefore) : null;
+  const nextSendAt = notBefore && notBefore > afterDelay ? notBefore : afterDelay;
   const result = await Enrollment.updateOne(
     { _id: enrollment._id, status: "active", "awaitingDelivery.messageId": message._id },
     {
@@ -115,6 +119,7 @@ export async function releaseAfterDelivery(message, deliveredAt) {
         "awaitingDelivery.stepNumber": null,
         "awaitingDelivery.sentAt": null,
         "awaitingDelivery.delayMs": null,
+        "awaitingDelivery.notBefore": null,
       },
     }
   );

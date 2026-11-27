@@ -73,6 +73,8 @@ const enrollmentSchema = new mongoose.Schema(
       stepNumber: { type: Number, default: null },
       sentAt: { type: Date, default: null },
       delayMs: { type: Number, default: null },
+      // Campaign plan C4: fixed-date step — never before this moment.
+      notBefore: { type: Date, default: null },
     },
     lastDeliveredAt: {
       type: Date,

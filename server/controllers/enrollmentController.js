@@ -17,6 +17,7 @@ import Campaign from "../models/Campaign.js";
 import Contact from "../models/Contact.js";
 import Enrollment from "../models/Enrollment.js";
 import { createSystemLog } from "../services/systemLogService.js";
+import { prepareForNewContacts } from "../services/campaignScheduleService.js";
 import {
   findDoNotText,
   findDoNotTextMany,
@@ -78,6 +79,13 @@ export async function enrollContact(req, res) {
 
     if (!campaign.isActive) {
       return res.status(400).json({ message: "Campaign is inactive" });
+    }
+
+    // Campaign plan C4: finished campaigns take no new contacts (one that only
+    // ran out of contacts re-opens if its dates still allow).
+    const open = await prepareForNewContacts(campaign);
+    if (!open.ok) {
+      return res.status(400).json({ message: open.message });
     }
 
     const firstStep = getFirstStep(campaign);
@@ -175,6 +183,13 @@ export async function bulkEnrollContacts(req, res) {
 
     if (!campaign.isActive) {
       return res.status(400).json({ message: "Campaign is inactive" });
+    }
+
+    // Campaign plan C4: finished campaigns take no new contacts (one that only
+    // ran out of contacts re-opens if its dates still allow).
+    const open = await prepareForNewContacts(campaign);
+    if (!open.ok) {
+      return res.status(400).json({ message: open.message });
     }
 
     const firstStep = getFirstStep(campaign);
