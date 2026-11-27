@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../services/api";
 import AppLayout from "../components/AppLayout";
+import {
+  DEFAULT_TIMEZONE,
+  TIMEZONE_OPTIONS,
+  SETTINGS_SAVED_EVENT,
+  timeNowIn,
+} from "../utils/timezones";
 
 // Value = normalized line type stored on the server; label = what the user sees.
 const LINE_TYPE_OPTIONS = [
@@ -12,31 +18,6 @@ const LINE_TYPE_OPTIONS = [
   { value: "unknown", label: "Unknown" },
 ];
 
-// Timezone the campaign sending window hours are read in.
-const DEFAULT_TIMEZONE = "America/New_York";
-const TIMEZONE_OPTIONS = [
-  { value: "America/New_York", label: "Eastern (New York)" },
-  { value: "America/Chicago", label: "Central (Chicago)" },
-  { value: "America/Denver", label: "Mountain (Denver)" },
-  { value: "America/Phoenix", label: "Arizona (Phoenix, no DST)" },
-  { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
-  { value: "America/Anchorage", label: "Alaska (Anchorage)" },
-  { value: "Pacific/Honolulu", label: "Hawaii (Honolulu)" },
-  { value: "UTC", label: "UTC" },
-];
-
-function timeNowIn(timeZone) {
-  try {
-    return new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      hour: "numeric",
-      minute: "2-digit",
-      weekday: "short",
-    }).format(new Date());
-  } catch {
-    return "";
-  }
-}
 
 export default function SettingsPage() {
   const [form, setForm] = useState({
@@ -46,8 +27,8 @@ export default function SettingsPage() {
       endHour: 18,
     },
     timezone: DEFAULT_TIMEZONE,
-    maxMessagesPerRun: 20,
     allowedLineTypes: ["mobile"],
+    minCampaignGap: { value: 5, unit: "seconds" },
     autoPause: { enabled: true, afterUndeliveredInARow: 10 },
     doNotTextList: { manual: "warn", ai: "warn" },
   });
@@ -89,7 +70,10 @@ export default function SettingsPage() {
           endHour: Number(data.sendingWindow?.endHour ?? 18),
         },
         timezone: data.timezone || DEFAULT_TIMEZONE,
-        maxMessagesPerRun: Number(data.maxMessagesPerRun ?? 20),
+        minCampaignGap: {
+          value: Number(data.minCampaignGap?.value ?? 5),
+          unit: data.minCampaignGap?.unit || "seconds",
+        },
         allowedLineTypes: Array.isArray(data.allowedLineTypes)
           ? data.allowedLineTypes
           : ["mobile"],
@@ -139,7 +123,10 @@ export default function SettingsPage() {
           endHour: Number(form.sendingWindow.endHour),
         },
         timezone: form.timezone,
-        maxMessagesPerRun: Number(form.maxMessagesPerRun),
+        minCampaignGap: {
+          value: Number(form.minCampaignGap.value),
+          unit: form.minCampaignGap.unit,
+        },
         allowedLineTypes: form.allowedLineTypes,
         autoPause: {
           enabled: form.autoPause.enabled,
@@ -154,6 +141,10 @@ export default function SettingsPage() {
       });
 
       setSuccess("Automation settings updated");
+      // Let the on-screen clock switch to the new timezone straight away.
+      window.dispatchEvent(
+        new CustomEvent(SETTINGS_SAVED_EVENT, { detail: { timezone: form.timezone } })
+      );
       await loadSettings();
     } catch (err) {
       setError(err.message || "Failed to update settings");
@@ -405,20 +396,42 @@ export default function SettingsPage() {
                   />
                 </label>
 
-                <label className="field-block">
-                  <span>Max Messages Per Run</span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.maxMessagesPerRun}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        maxMessagesPerRun: e.target.value,
-                      }))
-                    }
-                  />
-                </label>
+                <div className="field-block">
+                  <span>Minimum gap between campaign texts</span>
+                  <div className="gap-row">
+                    <input
+                      type="number"
+                      min="1"
+                      step="any"
+                      value={form.minCampaignGap.value}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          minCampaignGap: { ...prev.minCampaignGap, value: e.target.value },
+                        }))
+                      }
+                      aria-label="Minimum gap between campaign texts"
+                    />
+                    <select
+                      value={form.minCampaignGap.unit}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          minCampaignGap: { ...prev.minCampaignGap, unit: e.target.value },
+                        }))
+                      }
+                      aria-label="Minimum gap unit"
+                    >
+                      <option value="seconds">seconds</option>
+                      <option value="minutes">minutes</option>
+                      <option value="hours">hours</option>
+                    </select>
+                  </div>
+                  <small className="muted">
+                    Each campaign sets its own gap; none can be shorter than this. Never
+                    below 5 seconds.
+                  </small>
+                </div>
               </div>
 
               <div className="field-block">

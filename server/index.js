@@ -22,6 +22,8 @@ import aiRoutes from "./routes/aiRoutes.js";
 import { runAutomationCycle } from "./jobs/automationWorker.js";
 import { runAiReplyCycle } from "./jobs/aiReplyWorker.js";
 import { encryptStoredTwilioToken } from "./services/twilioService.js";
+import Campaign from "./models/Campaign.js";
+import { DEFAULT_CAMPAIGN_GAP } from "./utils/campaignGap.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -31,7 +33,9 @@ const app = express();
 // client from X-Forwarded-For — the login attempt limit keys on it.
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 4000;
-const AUTOMATION_INTERVAL_MS = 60000;
+// Campaign plan C2: campaigns pace themselves with their own gap (≥ 5 s), so
+// the worker checks every 5 s instead of sending a batch once a minute.
+const AUTOMATION_INTERVAL_MS = 5000;
 // Shorter than automation so replies feel timely; the interval also doubles as
 // the human-takeover race buffer before the AI answers.
 const AI_REPLY_INTERVAL_MS = 20000;
@@ -96,6 +100,17 @@ async function startServer() {
   await encryptStoredTwilioToken().catch((error) => {
     console.error("Could not encrypt the stored Twilio auth token:", error);
   });
+
+  // Campaign plan C2 (Q17): campaigns from before the gap existed start with
+  // a 30-second gap. Runs once per campaign; never overwrites a set gap.
+  await Campaign.updateMany(
+    { "gap.value": { $exists: false } },
+    { $set: { gap: DEFAULT_CAMPAIGN_GAP } }
+  )
+    .then((r) => {
+      if (r.modifiedCount) console.log(`Gave ${r.modifiedCount} campaign(s) the default 30-second gap.`);
+    })
+    .catch((error) => console.error("Could not set default campaign gaps:", error));
 
   const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { apiFetch } from "../services/api";
+import {
+  DEFAULT_TIMEZONE,
+  SETTINGS_SAVED_EVENT,
+  timezoneLabel,
+  clockText,
+  zoneAbbreviation,
+} from "../utils/timezones";
 
 /* Inline icons (no external icon-lib version risk) */
 const PATHS = {
@@ -82,6 +89,37 @@ export default function AppLayout({ children }) {
 
   const [unread, setUnread] = useState(0);
 
+  // On-screen clock in the account timezone (Settings → Timezone), so the
+  // campaign sending window is easy to read against the current time.
+  const [timeZone, setTimeZone] = useState(DEFAULT_TIMEZONE);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let alive = true;
+    apiFetch("/settings")
+      .then((s) => {
+        if (alive && s?.timezone) setTimeZone(s.timezone);
+      })
+      .catch(() => {
+        /* keep the default */
+      });
+
+    function onSaved(e) {
+      if (e?.detail?.timezone) setTimeZone(e.detail.timezone);
+    }
+    window.addEventListener(SETTINGS_SAVED_EVENT, onSaved);
+
+    const id = setInterval(() => setNow(new Date()), 15000);
+    return () => {
+      alive = false;
+      window.removeEventListener(SETTINGS_SAVED_EVENT, onSaved);
+      clearInterval(id);
+    };
+  }, []);
+
+  const zoneShort = zoneAbbreviation(now, timeZone);
+  const zoneLong = timezoneLabel(timeZone);
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
@@ -122,6 +160,23 @@ export default function AppLayout({ children }) {
             <span className="brand-sub">SMS Automation</span>
           </div>
         </div>
+
+        <NavLink
+          to="/settings"
+          className="sidebar-clock"
+          title={`Account time: ${clockText(now, timeZone)} — ${zoneLong} (${timeZone}). Change it in Settings.`}
+          aria-label={`Account time ${clockText(now, timeZone)}, ${zoneLong}`}
+          onClick={() => setNavOpen(false)}
+        >
+          <span className="clock-time">
+            {clockText(now, timeZone)}
+            <span className="clock-zone-short"> {zoneShort}</span>
+          </span>
+          <span className="clock-zone">
+            {zoneLong}
+            {zoneShort ? ` · ${zoneShort}` : ""}
+          </span>
+        </NavLink>
 
         <nav className="sidebar-nav">
           {NAV.map((section) => (

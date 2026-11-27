@@ -129,6 +129,17 @@ button, input, select, textarea { font: inherit; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
 .brand-name { font-weight: 800; font-size: 17px; }
 .brand-sub { font-size: 11px; color: var(--muted); }
+/* Account clock: current time in the Settings timezone */
+.sidebar-clock {
+  display: flex; flex-direction: column; gap: 2px;
+  margin: 0 var(--s4) var(--s3); padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface-2); color: inherit; text-decoration: none;
+}
+.sidebar-clock:hover { border-color: var(--primary); }
+.sidebar-clock .clock-time { font-size: 15px; font-weight: 700; letter-spacing: -0.2px; font-variant-numeric: tabular-nums; }
+.sidebar-clock .clock-zone { font-size: 11px; color: var(--muted); }
+.sidebar-clock .clock-zone-short { display: none; }
 
 .sidebar-nav { padding: var(--s2) var(--s3); overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .nav-group-title {
@@ -488,6 +499,11 @@ p.status-success {
   padding-top: var(--s3); border-top: 1px solid var(--border);
 }
 .campaign-stat { display: flex; flex-direction: column; }
+/* Campaign plan C2: gap between texts */
+.gap-row { display: flex; gap: 8px; }
+.gap-row input { flex: 0 0 120px; min-width: 0; }
+.gap-row select { flex: 0 0 140px; }
+.campaign-pace { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .campaign-step-delivery { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--s3); }
 .campaign-stat .n { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
 .campaign-stat .n.rate { color: var(--primary); }
@@ -1019,6 +1035,10 @@ a.list-row + a.list-row { margin-top: var(--s2); }
   .sidebar { width: 76px; }
   .brand { justify-content: center; padding: var(--s5) 0 var(--s4); }
   .brand-text { display: none; }
+  .sidebar-clock { margin: 0 6px var(--s3); padding: 6px 4px; align-items: center; text-align: center; }
+  .sidebar-clock .clock-time { font-size: 11px; }
+  .sidebar-clock .clock-zone { display: none; }
+  .sidebar-clock .clock-zone-short { display: block; font-size: 10px; font-weight: 500; color: var(--muted); }
   .nav-group-title { display: none; }
   .sidebar-nav a { justify-content: center; padding: 11px 0; }
   .nav-label, .nav-badge { display: none; }
