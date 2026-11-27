@@ -90,6 +90,7 @@ function scheduleText(campaign, timeZone) {
 }
 
 function campaignStatus(campaign) {
+  if (campaign.state === "stopped") return { label: "Stopped", cls: "badge-gray" };
   if (!campaign.isActive) return { label: "Paused", cls: "badge-orange" };
   if (campaign.state === "completed") return { label: "Completed", cls: "badge-gray" };
   if (campaign.state === "finishing") return { label: "Finishing", cls: "badge-orange" };
@@ -143,6 +144,46 @@ export default function CampaignsPage() {
   const [accountTz, setAccountTz] = useState("America/New_York");
   // Campaign plan C3: platform daily SMS limit and how much of it is used today.
   const [platform, setPlatform] = useState({ limit: null, today: 0 });
+
+  // Campaign plan C5: Stop dialog (final) — separate from Pause.
+  const [stopFor, setStopFor] = useState(null);
+  const [stopPreview, setStopPreview] = useState(null);
+  const [stopRemovePending, setStopRemovePending] = useState(false);
+  const [stopping, setStopping] = useState(false);
+
+  async function openStop(campaign) {
+    setStopFor(campaign);
+    setStopPreview(null);
+    setStopRemovePending(false);
+    try {
+      setStopPreview(await apiFetch(`/campaigns/${campaign._id}/stop-preview`));
+    } catch (err) {
+      setError(err.message || "Failed to prepare the stop");
+    }
+  }
+
+  async function confirmStop() {
+    if (!stopFor) return;
+    try {
+      setStopping(true);
+      setError("");
+      const res = await apiFetch(`/campaigns/${stopFor._id}/stop`, {
+        method: "POST",
+        body: JSON.stringify({ removePending: stopRemovePending }),
+      });
+      const s = res.summary || {};
+      setSuccess(
+        `"${stopFor.name}" stopped: ${s.stoppedContacts ?? 0} contact(s) stopped` +
+          (stopRemovePending ? `, ${s.removedContacts ?? 0} removed` : "")
+      );
+      setStopFor(null);
+      await Promise.all([loadCampaigns(), loadStats()]);
+    } catch (err) {
+      setError(err.message || "Failed to stop campaign");
+    } finally {
+      setStopping(false);
+    }
+  }
 
   // Enroll-contacts modal state
   const [enrollFor, setEnrollFor] = useState(null);
@@ -785,7 +826,11 @@ export default function CampaignsPage() {
                         </div>
                       </div>
 
-                      <div className="campaign-schedule-line">{scheduleText(campaign, accountTz)}</div>
+                      <div className="campaign-schedule-line">
+                        {campaign.state === "stopped"
+                          ? `Stopped ${formatWhen(campaign.stoppedAt, accountTz)}${campaign.stoppedRemovedContacts ? ` · ${campaign.stoppedRemovedContacts} contact(s) that never got step 1 removed` : ""}`
+                          : scheduleText(campaign, accountTz)}
+                      </div>
 
                       {s?.today ? (
                         <div className="campaign-today">
@@ -880,13 +925,15 @@ export default function CampaignsPage() {
                       ) : null}
 
                       <div className="campaign-actions">
-                        <button
-                          type="button"
-                          onClick={() => openEnroll(campaign)}
-                          disabled={busyId === campaign._id}
-                        >
-                          Enroll
-                        </button>
+                        {campaign.state !== "stopped" && campaign.state !== "completed" ? (
+                          <button
+                            type="button"
+                            onClick={() => openEnroll(campaign)}
+                            disabled={busyId === campaign._id}
+                          >
+                            Enroll
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => startEdit(campaign)}
@@ -894,13 +941,27 @@ export default function CampaignsPage() {
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleActive(campaign)}
-                          disabled={busyId === campaign._id}
-                        >
-                          {campaign.isActive ? "Pause" : "Resume"}
-                        </button>
+                        {campaign.state !== "stopped" && campaign.state !== "completed" ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => toggleActive(campaign)}
+                              disabled={busyId === campaign._id}
+                              title={campaign.isActive ? "Pause: hold sending, resume any time" : "Resume sending"}
+                            >
+                              {campaign.isActive ? "Pause" : "Resume"}
+                            </button>
+                            <button
+                              type="button"
+                              className="danger-text"
+                              onClick={() => openStop(campaign)}
+                              disabled={busyId === campaign._id}
+                              title="Stop: end the campaign for good"
+                            >
+                              Stop
+                            </button>
+                          </>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => cloneCampaign(campaign)}
@@ -927,6 +988,53 @@ export default function CampaignsPage() {
           </section>
         </div>
       </div>
+
+      {stopFor ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Stop campaign">
+          <div className="modal stop-modal">
+            <h3>Stop &ldquo;{stopFor.name}&rdquo;?</h3>
+            <p>
+              Stopping is <strong>final</strong>: no more texts from this campaign, and every contact
+              still in it is stopped. To hold sending and continue later, use <strong>Pause</strong> instead.
+            </p>
+            {stopPreview ? (
+              <>
+                <p className="muted">
+                  {stopPreview.activeContacts} contact(s) still in it · {stopPreview.neverGotStep1} never got step 1
+                </p>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={stopRemovePending}
+                    onChange={(e) => setStopRemovePending(e.target.checked)}
+                    disabled={!stopPreview.removable}
+                  />
+                  <span>
+                    Also remove the {stopPreview.removable} contact(s) that never got step 1, so a future
+                    import treats their numbers as new
+                  </span>
+                </label>
+                {stopPreview.keptInOtherCampaign || stopPreview.keptWithHistory ? (
+                  <p className="muted">
+                    Kept anyway: {stopPreview.keptInOtherCampaign} in another campaign,{" "}
+                    {stopPreview.keptWithHistory} with message history.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="muted">Checking contacts…</p>
+            )}
+            <div className="form-actions">
+              <button type="button" className="secondary-button" onClick={() => setStopFor(null)} disabled={stopping}>
+                Cancel
+              </button>
+              <button type="button" className="danger-button" onClick={confirmStop} disabled={stopping || !stopPreview}>
+                {stopping ? "Stopping…" : "Stop campaign"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {enrollFor ? (
         <div className="modal-overlay" onClick={closeEnroll}>

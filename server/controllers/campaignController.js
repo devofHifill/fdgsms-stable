@@ -20,6 +20,7 @@ import { NO_REPORT_AFTER_MS } from "../services/campaignDeliveryService.js";
 import AutomationSettings from "../models/AutomationSettings.js";
 import { dayStart, countStep1Today, step1Room } from "../services/dailyLimitService.js";
 import { parseSchedule, parseStepStart, acceptsNewContacts } from "../utils/campaignSchedule.js";
+import { stopCampaign, findPendingContacts } from "../services/campaignStopService.js";
 import {
   parseGap,
   gapToMs,
@@ -150,6 +151,14 @@ export async function updateCampaign(req, res) {
       update.gap = checked.gap;
     }
 
+    // Campaign plan C5: a stopped campaign is final — it can't be resumed.
+    if (isActive === true) {
+      const current = await Campaign.findById(id, { state: 1 }).lean();
+      if (current?.state === "stopped") {
+        return res.status(400).json({ message: "This campaign was stopped and can't be resumed. Clone it to run it again." });
+      }
+    }
+
     if (typeof name === "string") update.name = name.trim();
     if (typeof isActive === "boolean") update.isActive = isActive;
     // Resuming (by hand) clears an auto-pause and its run counter (Q7c).
@@ -198,6 +207,45 @@ export async function updateCampaign(req, res) {
     res.json(campaign);
   } catch (error) {
     res.status(500).json({ message: "Failed to update campaign" });
+  }
+}
+
+// Campaign plan C5: what Stop would remove — for the Stop dialog.
+export async function getStopPreview(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid campaign id" });
+    const campaign = await Campaign.findById(id).lean();
+    if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+    const found = await findPendingContacts(campaign);
+    const active = await Enrollment.countDocuments({ campaignId: campaign._id, status: "active" });
+    res.json({
+      activeContacts: active,
+      neverGotStep1: found.pending.length,
+      removable: found.removable.length,
+      keptInOtherCampaign: found.kept.otherCampaign,
+      keptWithHistory: found.kept.history,
+    });
+  } catch (error) {
+    console.error("getStopPreview error:", error);
+    res.status(500).json({ message: "Failed to prepare the stop" });
+  }
+}
+
+// POST /api/campaigns/:id/stop  { removePending } — final (C5).
+export async function stopCampaignHandler(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid campaign id" });
+    const result = await stopCampaign(id, {
+      removePending: req.body?.removePending === true,
+      by: req.user?.email || "admin",
+    });
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    res.json({ message: "Campaign stopped", item: result.campaign, summary: result.summary });
+  } catch (error) {
+    console.error("stopCampaign error:", error);
+    res.status(500).json({ message: "Failed to stop campaign" });
   }
 }
 

@@ -107,6 +107,10 @@ export async function prepareForNewContacts(campaign, now = new Date()) {
     return { ok: true, reopened: true };
   }
 
+  if (state === "stopped") {
+    return { ok: false, message: "This campaign was stopped and no longer takes new contacts. Clone it to run it again." };
+  }
+
   return {
     ok: false,
     message:

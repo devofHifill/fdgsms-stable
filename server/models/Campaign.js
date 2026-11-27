@@ -67,12 +67,15 @@ const campaignSchema = new mongoose.Schema(
     // steps) → completed (nobody left). Pausing is separate (isActive).
     state: {
       type: String,
-      enum: ["running", "finishing", "completed"],
+      enum: ["running", "finishing", "completed", "stopped"],
       default: "running",
     },
     finishingReason: { type: String, default: "" }, // end_date | contacts_ran_out
     finishingAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
+    // Campaign plan C5: Stop is final (Pause = isActive false, resumable).
+    stoppedAt: { type: Date, default: null },
+    stoppedRemovedContacts: { type: Number, default: 0 },
     // When this campaign last sent a text (claimed atomically before sending).
     lastCampaignSendAt: {
       type: Date,

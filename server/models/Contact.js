@@ -134,6 +134,10 @@ const contactSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Campaign plan C5: when / why it was soft-deleted (e.g. removed by a
+    // campaign Stop). A later import brings the contact back.
+    deletedAt: { type: Date, default: null },
+    deletedReason: { type: String, default: "" },
   },
   {
     timestamps: true,
