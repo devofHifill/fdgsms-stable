@@ -8,6 +8,7 @@ import AiReplyJob from "../models/AiReplyJob.js";
 import { sendSMS } from "../services/twilioService.js";
 import { upsertConversation } from "../services/conversationService.js";
 import { createSystemLog } from "../services/systemLogService.js";
+import { checkDoNotText } from "../services/doNotTextService.js";
 
 const AI_MODES = ["default", "forced_on", "forced_off"];
 
@@ -201,6 +202,14 @@ export async function approveDraft(req, res) {
       return res.status(403).json({ message: "This contact has opted out and cannot be messaged." });
     }
 
+    // Approving a draft is a person sending it → manual do-not-text choice.
+    const dnt = await checkDoNotText(contact.normalizedPhone, "manual");
+    if (dnt.blocked) {
+      return res.status(403).json({
+        message: `${dnt.warning} Manual texts to it are blocked in Settings.`,
+      });
+    }
+
     const body = typeof text === "string" && text.trim() ? text.trim() : job.result?.text || "";
     if (!body) {
       return res.status(400).json({ message: "Draft has no text to send" });
@@ -243,7 +252,12 @@ export async function approveDraft(req, res) {
       metadata: { jobId: String(job._id), messageId: String(message._id), by: agentLabel(req) },
     });
 
-    return res.status(200).json({ message: "Draft sent", item: message, job });
+    return res.status(200).json({
+      message: "Draft sent",
+      item: message,
+      job,
+      ...(dnt.warning ? { warning: dnt.warning } : {}),
+    });
   } catch (error) {
     console.error("approveDraft error:", error);
     return res.status(500).json({ message: error.message || "Failed to send draft" });

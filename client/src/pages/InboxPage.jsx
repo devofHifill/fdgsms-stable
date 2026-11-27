@@ -102,6 +102,7 @@ export default function InboxPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   // AI reply controls + draft review (Phase 6)
   const [aiMode, setAiMode] = useState("default");
@@ -252,6 +253,7 @@ export default function InboxPage() {
       try {
         setSending(true);
         setError("");
+        setNotice("");
 
         const res = await apiFetch("/messages/send", {
           method: "POST",
@@ -265,6 +267,9 @@ export default function InboxPage() {
           setMessages((prev) => mergeMessages(prev, [res.item]));
           shouldScrollToBottomRef.current = true;
         }
+
+        // Sent to a number on the do-not-text list (Settings: allow with a warning).
+        if (res?.warning) setNotice(`Sent. ${res.warning}`);
 
         setText("");
 
@@ -971,6 +976,12 @@ export default function InboxPage() {
               </div>
 
               {error ? <div className="inbox-error-banner">{error}</div> : null}
+              {notice ? (
+                <div className="inbox-warn-banner" role="status">
+                  {notice}
+                  <button type="button" onClick={() => setNotice("")} aria-label="Dismiss">×</button>
+                </div>
+              ) : null}
               {optedOut ? (
                 <div className="optout-banner">
                   This contact has opted out — sending is disabled.
