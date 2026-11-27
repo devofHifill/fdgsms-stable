@@ -26,10 +26,10 @@ merged to `staging` → tested on the staging site → promoted to `main`.
 | 15 | Remove hardcoded IP from CORS list | 🟢 Low | ✅ | `chore/cleanup` | [#57](https://github.com/devofHifill/fdgsms-stable/pull/57) → staging → main [#62](https://github.com/devofHifill/fdgsms-stable/pull/62) |
 | 16 | Remove dead commented code + stray root file | 🟢 Low | ✅ | `chore/cleanup` (with #15) | [#57](https://github.com/devofHifill/fdgsms-stable/pull/57) → staging → main [#62](https://github.com/devofHifill/fdgsms-stable/pull/62) |
 | 17 | AI system logs never saved (`ai` not an allowed log category) | 🟠 High | ✅ | `fix/systemlog-ai-category` | [#50](https://github.com/devofHifill/fdgsms-stable/pull/50) → staging → main [#62](https://github.com/devofHifill/fdgsms-stable/pull/62) |
-| 18 | Twilio delivery errors (30006/30007…) not recorded or shown | 🟠 High | 🟨 | `fix/twilio-delivery-status` | |
+| 18 | Twilio delivery errors (30006/30007…) not recorded or shown | 🟠 High | ✅ | `fix/twilio-delivery-status` | [#66](https://github.com/devofHifill/fdgsms-stable/pull/66) → staging → main [#67](https://github.com/devofHifill/fdgsms-stable/pull/67) |
 
 
-**Progress:** 17 / 18 done
+**Progress:** 18 / 18 done — all on `main` and checked on live (2026-11-26)
 
 ---
 
@@ -330,7 +330,7 @@ the IP:port address first.
 **Problem:** sends never told Twilio where to report the final status, so every message stayed
 "accepted": 30006/30007 etc. were only visible in the Twilio console, the Inbox never showed
 them, and campaigns kept texting numbers that can't receive SMS.
-**Done (on `fix/twilio-delivery-status`):**
+**Done (merged to staging in [#66](https://github.com/devofHifill/fdgsms-stable/pull/66), main in [#67](https://github.com/devofHifill/fdgsms-stable/pull/67); live 2026-11-26):**
 - `sendSMS` passes `statusCallback` = `PUBLIC_BASE_URL` + `/api/webhooks/twilio/status` (https only;
   left out locally). Compose already sets `PUBLIC_BASE_URL` to `https://APP_DOMAIN`.
 - New `server/utils/twilioErrors.js`: plain-language label per code + permanent / dead-number flags.
@@ -343,8 +343,8 @@ them, and campaigns kept texting numbers that can't receive SMS.
 - Checked: `server/tests/twilioErrors.test.js`; throwaway-DB run (30006 → stopped + invalid,
   30007 → recorded only, late `sent` ignored, repeat callback logged once, opted-out kept);
   local Inbox shows both error lines, Retry only on the temporary one.
-- Not checked against real Twilio yet: on staging/live send one text and confirm it moves to
-  `delivered` (or shows the error).
+- Checked on live 2026-11-26: a test text to the test contact went accepted → `delivered`
+  within 5 s via Twilio's signed status callback. Messages sent before this deploy stay "accepted".
 
 ---
 
