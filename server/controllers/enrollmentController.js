@@ -77,15 +77,15 @@ export async function enrollContact(req, res) {
       return res.status(404).json({ message: "Campaign not found" });
     }
 
-    if (!campaign.isActive) {
-      return res.status(400).json({ message: "Campaign is inactive" });
-    }
-
     // Campaign plan C4: finished campaigns take no new contacts (one that only
     // ran out of contacts re-opens if its dates still allow).
     const open = await prepareForNewContacts(campaign);
     if (!open.ok) {
       return res.status(400).json({ message: open.message });
+    }
+
+    if (!campaign.isActive) {
+      return res.status(400).json({ message: "Campaign is paused — resume it to enroll contacts" });
     }
 
     const firstStep = getFirstStep(campaign);
@@ -181,15 +181,15 @@ export async function bulkEnrollContacts(req, res) {
       return res.status(404).json({ message: "Campaign not found" });
     }
 
-    if (!campaign.isActive) {
-      return res.status(400).json({ message: "Campaign is inactive" });
-    }
-
     // Campaign plan C4: finished campaigns take no new contacts (one that only
     // ran out of contacts re-opens if its dates still allow).
     const open = await prepareForNewContacts(campaign);
     if (!open.ok) {
       return res.status(400).json({ message: open.message });
+    }
+
+    if (!campaign.isActive) {
+      return res.status(400).json({ message: "Campaign is paused — resume it to enroll contacts" });
     }
 
     const firstStep = getFirstStep(campaign);

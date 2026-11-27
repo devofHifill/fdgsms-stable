@@ -354,8 +354,41 @@ export async function importContacts(req, res) {
     let insertedCount = 0;
     const insertedItems = [];
 
+    // Campaign plan C5: a number whose contact was removed (soft-deleted, e.g.
+    // by a campaign Stop) is brought back with the new sheet's details instead
+    // of failing as a duplicate. Opt-outs and the do-not-text list still apply.
+    const removedByPhone = new Map(
+      (
+        await Contact.find(
+          { normalizedPhone: { $in: docs.map((d) => d.normalizedPhone) }, isDeleted: true },
+          { _id: 1, normalizedPhone: 1, optedOut: 1 }
+        ).lean()
+      ).map((c) => [c.normalizedPhone, c])
+    );
+    let restoredCount = 0;
+
     for (const doc of docs) {
       try {
+        const removed = removedByPhone.get(doc.normalizedPhone);
+        if (removed) {
+          const restored = await Contact.findByIdAndUpdate(
+            removed._id,
+            {
+              $set: {
+                ...doc,
+                status: removed.optedOut ? "opted_out" : doc.status,
+                isDeleted: false,
+                deletedAt: null,
+                deletedReason: "",
+              },
+            },
+            { returnDocument: "after" }
+          );
+          insertedCount += 1;
+          restoredCount += 1;
+          insertedItems.push(restored);
+          continue;
+        }
         const created = await Contact.create(doc);
         insertedCount += 1;
         insertedItems.push(created);
@@ -381,6 +414,7 @@ export async function importContacts(req, res) {
         batchId: batch._id,
         originalFileName: batch.originalFileName || "",
         importedCount: insertedCount,
+        restoredCount,
         failedCount: failedRows.length,
         totalRequestedRows: validRows.length,
         acceptedRows: docs.length,

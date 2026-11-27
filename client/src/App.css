@@ -1125,3 +1125,8 @@ a.list-row + a.list-row { margin-top: var(--s2); }
 .campaign-schedule-line { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .badge-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .badge-gray { background: rgba(148, 163, 184, 0.18); color: var(--muted); padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+/* Campaign plan C5: Stop */
+.danger-text { color: var(--danger) !important; }
+.danger-button { background: var(--danger) !important; color: #fff !important; border-color: var(--danger) !important; }
+.stop-modal { max-width: 520px; padding: var(--s5); display: flex; flex-direction: column; gap: 10px; }
+.stop-modal p { margin: 0; }
